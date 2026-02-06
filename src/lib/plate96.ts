@@ -15,6 +15,16 @@ export const plate96WellIds = (() => {
   return wells
 })()
 
+export const plate96WellIdsColumnMajor = (() => {
+  const wells: WellId96[] = []
+  for (const col of PLATE96_COLS) {
+    for (const row of PLATE96_ROWS) {
+      wells.push(`${row}${col}` as WellId96)
+    }
+  }
+  return wells
+})()
+
 export const toWellIndex96 = (wellId: string): number | null => {
   const match = /^([A-H])\s*([1-9]|1[0-2])$/i.exec(wellId.trim())
   if (!match) return null
@@ -41,4 +51,3 @@ export const indexToWellId96 = (index: number): WellId96 | null => {
   if (idx < 0 || idx >= 96) return null
   return plate96WellIds[idx] ?? null
 }
-

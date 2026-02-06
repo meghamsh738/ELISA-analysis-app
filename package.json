@@ -8,6 +8,7 @@
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite --host --port 5180",
+    "dev:e2e": "vite --host --port 5181",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview --host --port 5180",

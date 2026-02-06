@@ -12,9 +12,12 @@ process.env.PLAYWRIGHT_BROWSERS_PATH =
   process.env.PLAYWRIGHT_BROWSERS_PATH ?? path.join(__dirname, '.playwright-browsers')
 
 const isWindows = process.platform === 'win32'
+const port = 5181
+const url = `http://localhost:${port}`
+const webServerCommandBase = `npm run dev:e2e -- --port ${port}`
 const webServerCommand = isWindows
-  ? 'npm run dev'
-  : "bash -lc 'set -e; PATH=/usr/bin:/bin:$PATH npm run dev'"
+  ? webServerCommandBase
+  : `bash -lc 'set -e; PATH=/usr/bin:/bin:$PATH ${webServerCommandBase}'`
 
 export default defineConfig({
   testDir: './tests',
@@ -25,7 +28,7 @@ export default defineConfig({
     toHaveScreenshot: { animations: 'disabled', caret: 'hide' },
   },
   use: {
-    baseURL: 'http://localhost:5180',
+    baseURL: url,
     trace: 'on-first-retry',
     viewport: { width: 1440, height: 900 },
     colorScheme: 'light',
@@ -34,7 +37,7 @@ export default defineConfig({
   },
   webServer: {
     command: webServerCommand,
-    url: 'http://localhost:5180',
+    url,
     reuseExistingServer: false,
     timeout: 120_000,
     stdout: 'ignore',

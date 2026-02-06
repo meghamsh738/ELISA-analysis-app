@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type MouseEvent } from 'react'
 import { Plate96 } from '../components/Plate96'
 import { emptyLayout96, type WellAssignment, type WellType } from '../lib/layoutModel'
-import { plate96WellIds, type WellId96, wellRange96 } from '../lib/plate96'
+import { plate96WellIds, plate96WellIdsColumnMajor, type WellId96, wellRange96 } from '../lib/plate96'
 import { guessColumnIndex, parseTableText, type TableText } from '../lib/tableText'
 
 const CONTROL_COLORS: Record<WellType, string> = {
@@ -32,6 +32,18 @@ const buildWellTitle = (well: WellAssignment) => {
   if (well.type === 'Standard') return `${well.wellId} • Standard ${well.standardLevel ?? ''}`.trim()
   if (well.type === 'Blank') return `${well.wellId} • Blank`
   return `${well.wellId} • Empty`
+}
+
+const parseStandardSeed = (raw: string): { prefix: string; start: number } => {
+  const trimmed = raw.trim()
+  if (!trimmed) return { prefix: 'Std', start: 1 }
+
+  const match = /^(.*?)(\d+)$/.exec(trimmed)
+  if (!match) return { prefix: trimmed, start: 1 }
+
+  const prefix = (match[1] || 'Std').trimEnd() || 'Std'
+  const start = Number(match[2])
+  return { prefix, start: Number.isFinite(start) && start > 0 ? start : 1 }
 }
 
 export type LayoutTabProps = {
@@ -137,11 +149,32 @@ export function LayoutTab({
     setLastClicked(null)
   }
 
+  const assignStandardsInPairs = () => {
+    if (!selected.size) return
+
+    const { prefix, start } = parseStandardSeed(stdLevel)
+    // Standards are usually laid out as duplicates side-by-side (ex: A1+A2, B1+B2, ...).
+    // We therefore assign in row-major order so pairs fall on adjacent columns within a row.
+    const ordered = plate96WellIds.filter((wellId) => selected.has(wellId))
+
+    const next = { ...wells }
+    const replicates = 2
+    for (let i = 0; i < ordered.length; i += 1) {
+      const wellId = ordered[i]
+      const levelNum = start + Math.floor(i / replicates)
+      next[wellId] = { wellId, type: 'Standard', keep: true, standardLevel: `${prefix}${levelNum}` }
+    }
+
+    onChangeWells(next)
+    setStdLevel(`${prefix}${start + Math.ceil(ordered.length / replicates)}`)
+  }
+
   const fillSamplesIntoEmpty = () => {
     if (!table.rows.length) return
     const next = { ...wells }
 
-    const emptyWellIds = plate96WellIds.filter((id) => next[id].type === 'Empty')
+    // Most wet-lab workflows fill plates by column (A1..H1, then A2..H2, etc).
+    const emptyWellIds = plate96WellIdsColumnMajor.filter((id) => next[id].type === 'Empty')
     let cursor = 0
 
     for (let i = 0; i < table.rows.length; i += 1) {
@@ -178,6 +211,10 @@ export function LayoutTab({
   const [stdLevel, setStdLevel] = useState('Std1')
   const markSelectedAs = (type: WellType) => {
     if (!selected.size) return
+    if (type === 'Standard') {
+      assignStandardsInPairs()
+      return
+    }
     const next = { ...wells }
     selected.forEach((wellId) => {
       if (type === 'Empty') {
@@ -186,10 +223,6 @@ export function LayoutTab({
       }
       if (type === 'Blank') {
         next[wellId] = { wellId, type: 'Blank', keep: true }
-        return
-      }
-      if (type === 'Standard') {
-        next[wellId] = { wellId, type: 'Standard', keep: true, standardLevel: stdLevel.trim() || 'Std' }
         return
       }
       // Sample assignment should come from the pasted list.
@@ -365,8 +398,11 @@ export function LayoutTab({
                   aria-label="Standard level"
                 />
                 <button className="ghost" type="button" onClick={() => markSelectedAs('Standard')} disabled={!selected.size}>
-                  Mark Standard
+                  Assign Standards
                 </button>
+              </div>
+              <div className="muted-small">
+                Standards are assigned as duplicates: <code>Std1</code>, <code>Std1</code>, <code>Std2</code>, <code>Std2</code>, ...
               </div>
 
               <div className="field-row">
