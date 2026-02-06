@@ -1,4 +1,20 @@
 import { defineConfig, devices } from '@playwright/test'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+// Keep Playwright browser downloads inside the repo so:
+// - WSL doesn't try to write to an unwritable global cache path
+// - the setup is predictable across machines/CI.
+process.env.PLAYWRIGHT_BROWSERS_PATH =
+  process.env.PLAYWRIGHT_BROWSERS_PATH ?? path.join(__dirname, '.playwright-browsers')
+
+const isWindows = process.platform === 'win32'
+const webServerCommand = isWindows
+  ? 'npm run dev'
+  : "bash -lc 'set -e; PATH=/usr/bin:/bin:$PATH npm run dev'"
 
 export default defineConfig({
   testDir: './tests',
@@ -17,7 +33,7 @@ export default defineConfig({
     video: 'retain-on-failure',
   },
   webServer: {
-    command: "bash -lc 'set -e; PATH=/usr/bin:/bin:$PATH npm run dev'",
+    command: webServerCommand,
     url: 'http://localhost:5180',
     reuseExistingServer: false,
     timeout: 120_000,
@@ -35,4 +51,3 @@ export default defineConfig({
     },
   ],
 })
-

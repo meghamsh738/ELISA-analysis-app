@@ -1,8 +1,11 @@
 {
   "name": "elisa-analysis-app",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "ELISA 96-well layout + analysis (net absorbance, standard curves, quantification).",
+  "author": "megha",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite --host --port 5180",
     "build": "tsc -b && vite build",
@@ -10,13 +13,40 @@
     "preview": "vite preview --host --port 5180",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "PLAYWRIGHT_BROWSERS_PATH=.playwright-browsers playwright test",
-    "test:e2e:headed": "PLAYWRIGHT_BROWSERS_PATH=.playwright-browsers PLAYWRIGHT_HEADLESS=0 playwright test",
-    "screenshots": "PLAYWRIGHT_BROWSERS_PATH=.playwright-browsers playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "screenshots": "playwright test",
+    "screenshots:update": "playwright test --update-snapshots",
+    "desktop:dev": "concurrently -k \"npm:dev\" \"npm:desktop:electron\"",
+    "desktop:electron": "wait-on tcp:5180 && electron .",
+    "desktop:pack": "npm run build && electron-builder --dir",
+    "desktop:dist": "npm run build && electron-builder"
   },
   "dependencies": {
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
+  },
+  "build": {
+    "appId": "com.easylab.elisa-analysis",
+    "productName": "ELISA Analysis",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -25,6 +55,9 @@
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "concurrently": "^9.2.1",
+    "electron": "^37.4.0",
+    "electron-builder": "^26.0.12",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
@@ -33,6 +66,7 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "wait-on": "^8.0.4"
   }
 }

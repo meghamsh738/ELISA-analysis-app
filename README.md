@@ -43,6 +43,20 @@ E2E smoke test (Playwright):
 npm run test:e2e
 ```
 
+## Desktop (Electron)
+
+Dev (runs Vite dev server + Electron):
+
+```bash
+npm run desktop:dev
+```
+
+Build an installer (Electron Builder):
+
+```bash
+npm run desktop:dist
+```
+
 ## Inputs
 
 Layout input: paste a table where one column is `Animal ID` (and optionally `Group`). The app can auto-guess, but you can override mappings.
