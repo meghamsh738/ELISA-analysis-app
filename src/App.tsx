@@ -15,6 +15,7 @@ type PersistedStateV1 = {
   sampleHasHeader: boolean
   animalIdCol: number
   groupCol: number
+  dilutionCol?: number
   wells: Record<string, WellAssignment>
   readerText: string
 }
@@ -46,6 +47,7 @@ function App() {
   const [sampleHasHeader, setSampleHasHeader] = useState<boolean>(persisted?.sampleHasHeader ?? false)
   const [animalIdCol, setAnimalIdCol] = useState<number>(persisted?.animalIdCol ?? 0)
   const [groupCol, setGroupCol] = useState<number>(persisted?.groupCol ?? -1)
+  const [dilutionCol, setDilutionCol] = useState<number>(persisted?.dilutionCol ?? -1)
   const [wells, setWells] = useState<Record<WellId96, WellAssignment>>(() => hydrateWells(persisted?.wells))
   const [readerText, setReaderText] = useState<string>(persisted?.readerText ?? '')
 
@@ -58,11 +60,12 @@ function App() {
       sampleHasHeader,
       animalIdCol,
       groupCol,
+      dilutionCol,
       wells,
       readerText,
     }
     writeLocalJson(STORAGE_KEY, next)
-  }, [tab, sampleText, sampleHasHeader, animalIdCol, groupCol, wells, readerText])
+  }, [tab, sampleText, sampleHasHeader, animalIdCol, groupCol, dilutionCol, wells, readerText])
 
   return (
     <div className="page">
@@ -113,6 +116,8 @@ function App() {
           onChangeAnimalIdCol={setAnimalIdCol}
           groupCol={groupCol}
           onChangeGroupCol={setGroupCol}
+          dilutionCol={dilutionCol}
+          onChangeDilutionCol={setDilutionCol}
           wells={wells}
           onChangeWells={setWells}
         />

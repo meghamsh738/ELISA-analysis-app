@@ -6,6 +6,7 @@ import {
   toColumnMajorNumber96,
   toWellIndex96,
   wellRange96,
+  wellRange96ColumnMajor,
 } from './plate96'
 
 describe('plate96', () => {
@@ -31,6 +32,12 @@ describe('plate96', () => {
     expect(toColumnMajorNumber96('H1')).toBe(8)
     expect(toColumnMajorNumber96('A2')).toBe(9)
     expect(toColumnMajorNumber96('H12')).toBe(96)
+  })
+
+  it('creates selection ranges in column-major order', () => {
+    expect(wellRange96ColumnMajor('A1', 'H1')).toEqual(['A1', 'B1', 'C1', 'D1', 'E1', 'F1', 'G1', 'H1'])
+    expect(wellRange96ColumnMajor('H1', 'A1')).toEqual(['A1', 'B1', 'C1', 'D1', 'E1', 'F1', 'G1', 'H1'])
+    expect(wellRange96ColumnMajor('A1', 'A2')).toEqual(['A1', 'B1', 'C1', 'D1', 'E1', 'F1', 'G1', 'H1', 'A2'])
   })
 
   it('maps well ids to indices and back', () => {

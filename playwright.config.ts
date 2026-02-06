@@ -8,8 +8,7 @@ const __dirname = path.dirname(__filename)
 // Keep Playwright browser downloads inside the repo so:
 // - WSL doesn't try to write to an unwritable global cache path
 // - the setup is predictable across machines/CI.
-process.env.PLAYWRIGHT_BROWSERS_PATH =
-  process.env.PLAYWRIGHT_BROWSERS_PATH ?? path.join(__dirname, '.playwright-browsers')
+process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(__dirname, '.playwright-browsers')
 
 const isWindows = process.platform === 'win32'
 const port = 5181

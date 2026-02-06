@@ -66,7 +66,7 @@ export const parseTableText = (text: string, options: ParseOptions): TableText =
 
 export const guessColumnIndex = (
   table: Pick<TableText, 'headers' | 'rows'>,
-  kind: 'animalId' | 'group'
+  kind: 'animalId' | 'group' | 'dilutionFactor'
 ): number => {
   if (!table.headers.length) return 0
 
@@ -76,6 +76,32 @@ export const guessColumnIndex = (
   if (kind === 'group') {
     const byName = headerMatch(/^(group|treatment|condition)$/i)
     return byName >= 0 ? byName : -1
+  }
+
+  if (kind === 'dilutionFactor') {
+    const byName = headerMatch(/^(dilution|dilution factor|dilution_factor|dilutionfactor|dil|df)$/i)
+    if (byName >= 0) return byName
+
+    // Heuristic: prefer columns that look like "10", "2", "1:10", "1/10", "10x", etc.
+    const dilutionLike = (v: string) =>
+      /^\s*\d+(\.\d+)?\s*$/.test(v) ||
+      /^\s*1\s*[:/]\s*\d+(\.\d+)?\s*$/.test(v) ||
+      /^\s*\d+(\.\d+)?\s*x\s*$/i.test(v) ||
+      /^\s*x\s*\d+(\.\d+)?\s*$/i.test(v)
+
+    const scores = table.headers.map((_, colIdx) => {
+      const values = table.rows.map((r) => (r[colIdx] ?? '').trim()).filter(Boolean)
+      if (values.length < 2) return -1
+      const hits = values.filter(dilutionLike).length
+      const ratio = hits / values.length
+      if (ratio < 0.6) return -1
+      return hits
+    })
+
+    const best = scores
+      .map((score, idx) => ({ score, idx }))
+      .sort((a, b) => b.score - a.score)[0]
+    return best?.score > 0 ? best.idx : -1
   }
 
   const byName = headerMatch(/^(animal|animal id|animal_id|id|mouse|rat)$/i)
@@ -96,4 +122,3 @@ export const guessColumnIndex = (
     .sort((a, b) => b.score - a.score)[0]
   return best?.idx ?? 0
 }
-

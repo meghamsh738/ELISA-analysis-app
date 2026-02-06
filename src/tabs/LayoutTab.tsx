@@ -1,7 +1,12 @@
-import { useEffect, useMemo, useState, type MouseEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { Plate96 } from '../components/Plate96'
 import { emptyLayout96, type WellAssignment, type WellType } from '../lib/layoutModel'
-import { plate96WellIds, plate96WellIdsColumnMajor, type WellId96, wellRange96 } from '../lib/plate96'
+import {
+  plate96WellIds,
+  plate96WellIdsColumnMajor,
+  type WellId96,
+  wellRange96ColumnMajor,
+} from '../lib/plate96'
 import { guessColumnIndex, parseTableText, type TableText } from '../lib/tableText'
 
 const CONTROL_COLORS: Record<WellType, string> = {
@@ -46,6 +51,39 @@ const parseStandardSeed = (raw: string): { prefix: string; start: number } => {
   return { prefix, start: Number.isFinite(start) && start > 0 ? start : 1 }
 }
 
+const parseDilutionFactor = (raw: string): number | null => {
+  const s = raw.trim()
+  if (!s) return null
+  const direct = Number(s)
+  if (Number.isFinite(direct) && direct > 0) return direct
+
+  const colon = /^\s*1\s*:\s*(\d+(\.\d+)?)\s*$/.exec(s)
+  if (colon) {
+    const v = Number(colon[1])
+    return Number.isFinite(v) && v > 0 ? v : null
+  }
+
+  const slash = /^\s*1\s*\/\s*(\d+(\.\d+)?)\s*$/.exec(s)
+  if (slash) {
+    const v = Number(slash[1])
+    return Number.isFinite(v) && v > 0 ? v : null
+  }
+
+  const times = /^\s*(\d+(\.\d+)?)\s*x\s*$/i.exec(s)
+  if (times) {
+    const v = Number(times[1])
+    return Number.isFinite(v) && v > 0 ? v : null
+  }
+
+  const prefixed = /^\s*x\s*(\d+(\.\d+)?)\s*$/i.exec(s)
+  if (prefixed) {
+    const v = Number(prefixed[1])
+    return Number.isFinite(v) && v > 0 ? v : null
+  }
+
+  return null
+}
+
 export type LayoutTabProps = {
   sampleText: string
   onChangeSampleText: (next: string) => void
@@ -55,6 +93,8 @@ export type LayoutTabProps = {
   onChangeAnimalIdCol: (next: number) => void
   groupCol: number
   onChangeGroupCol: (next: number) => void
+  dilutionCol: number
+  onChangeDilutionCol: (next: number) => void
 
   wells: Record<WellId96, WellAssignment>
   onChangeWells: (next: Record<WellId96, WellAssignment>) => void
@@ -69,11 +109,14 @@ export function LayoutTab({
   onChangeAnimalIdCol,
   groupCol,
   onChangeGroupCol,
+  dilutionCol,
+  onChangeDilutionCol,
   wells,
   onChangeWells,
 }: LayoutTabProps) {
   const [selected, setSelected] = useState<Set<WellId96>>(new Set())
   const [lastClicked, setLastClicked] = useState<WellId96 | null>(null)
+  const didAutoGuessDilution = useRef(false)
 
   const table: TableText = useMemo(
     () => parseTableText(sampleText, { hasHeader: sampleHasHeader }),
@@ -86,7 +129,22 @@ export function LayoutTab({
       onChangeAnimalIdCol(guessColumnIndex(table, 'animalId'))
     }
     if (groupCol >= table.headers.length) onChangeGroupCol(-1)
-  }, [table, animalIdCol, groupCol, onChangeAnimalIdCol, onChangeGroupCol])
+    if (dilutionCol >= table.headers.length) onChangeDilutionCol(-1)
+    if (dilutionCol < -1) onChangeDilutionCol(-1)
+    if (dilutionCol === -1 && !didAutoGuessDilution.current) {
+      const guess = guessColumnIndex(table, 'dilutionFactor')
+      if (guess >= 0) onChangeDilutionCol(guess)
+      didAutoGuessDilution.current = true
+    }
+  }, [
+    table,
+    animalIdCol,
+    groupCol,
+    dilutionCol,
+    onChangeAnimalIdCol,
+    onChangeGroupCol,
+    onChangeDilutionCol,
+  ])
 
   const sampleCount = table.rows.length
   const filledSamples = Object.values(wells).filter((w) => w.type === 'Sample').length
@@ -128,7 +186,9 @@ export function LayoutTab({
     setSelected((prev) => {
       const next = new Set(prev)
       if (isShift && lastClicked) {
-        const range = wellRange96(lastClicked, wellId)
+        // Column-major selection matches the reader's index order:
+        // A1..H1, A2..H2, ... A12..H12.
+        const range = wellRange96ColumnMajor(lastClicked, wellId)
         if (!isMulti) next.clear()
         range.forEach((w) => next.add(w))
       } else if (isMulti) {
@@ -176,6 +236,7 @@ export function LayoutTab({
     // Most wet-lab workflows fill plates by column (A1..H1, then A2..H2, etc).
     const emptyWellIds = plate96WellIdsColumnMajor.filter((id) => next[id].type === 'Empty')
     let cursor = 0
+    let dilutionParseFailures = 0
 
     for (let i = 0; i < table.rows.length; i += 1) {
       const row = table.rows[i]
@@ -183,6 +244,10 @@ export function LayoutTab({
       if (!animalId) continue
 
       const group = groupCol >= 0 ? (row[groupCol] ?? '').trim() : ''
+      const dilutionRaw = dilutionCol >= 0 ? (row[dilutionCol] ?? '').trim() : ''
+      const parsedDilution = dilutionCol >= 0 ? parseDilutionFactor(dilutionRaw) : null
+      const dilutionFactor = parsedDilution && parsedDilution > 0 ? parsedDilution : 1
+      if (dilutionCol >= 0 && dilutionRaw && parsedDilution === null) dilutionParseFailures += 1
       const meta: Record<string, string> = {}
       table.headers.forEach((h, idx) => {
         const cell = (row[idx] ?? '').trim()
@@ -200,12 +265,15 @@ export function LayoutTab({
         keep: true,
         animalId,
         group: group || undefined,
-        dilutionFactor: 1,
+        dilutionFactor,
         meta,
       }
     }
 
     onChangeWells(next)
+    if (dilutionParseFailures > 0) {
+      alert(`Could not parse ${dilutionParseFailures} dilution value(s); defaulted to 1 for those rows.`)
+    }
   }
 
   const [stdLevel, setStdLevel] = useState('Std1')
@@ -333,6 +401,17 @@ export function LayoutTab({
                   ))}
                 </select>
               </label>
+              <label className="control">
+                <span>Dilution column (optional)</span>
+                <select value={dilutionCol} onChange={(e) => onChangeDilutionCol(Number(e.target.value))}>
+                  <option value={-1}>&lt;none&gt;</option>
+                  {table.headers.map((h, idx) => (
+                    <option key={h + idx} value={idx}>
+                      {h}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
           )}
 
@@ -370,7 +449,8 @@ export function LayoutTab({
               <p className="kicker">Step 2 · Layout</p>
               <h2>96-well plate</h2>
               <p className="muted">
-                Click wells to select. Shift-click selects a sequence in plate order. Standards/blanks can be assigned manually.
+                Click wells to select. Shift-click selects a sequence in reader order (A1..H1, then A2..H2). Standards/blanks can be
+                assigned manually.
               </p>
             </div>
             <div className="row">
@@ -403,6 +483,9 @@ export function LayoutTab({
               </div>
               <div className="muted-small">
                 Standards are assigned as duplicates: <code>Std1</code>, <code>Std1</code>, <code>Std2</code>, <code>Std2</code>, ...
+                <br />
+                Tip: shift-click <code>A1</code> then <code>H2</code> to select the first 2 columns; duplicates map as{' '}
+                <code>A1</code>+<code>A2</code>, <code>B1</code>+<code>B2</code>, ...
               </div>
 
               <div className="field-row">

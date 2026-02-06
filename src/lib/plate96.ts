@@ -55,6 +55,15 @@ export const wellRange96 = (from: string, to: string): WellId96[] => {
   return plate96WellIds.slice(start, end + 1)
 }
 
+export const wellRange96ColumnMajor = (from: WellId96, to: WellId96): WellId96[] => {
+  const a = plate96WellIdsColumnMajor.indexOf(from)
+  const b = plate96WellIdsColumnMajor.indexOf(to)
+  if (a < 0 || b < 0) return []
+  const start = Math.min(a, b)
+  const end = Math.max(a, b)
+  return plate96WellIdsColumnMajor.slice(start, end + 1)
+}
+
 export const indexToWellId96 = (index: number): WellId96 | null => {
   if (!Number.isFinite(index)) return null
   const idx = Math.trunc(index)
