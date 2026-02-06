@@ -1,0 +1,107 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+:root {
+  --font-sans: 'Space Grotesk', 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
+  --font-display: var(--font-sans);
+  --font-body: var(--font-sans);
+  --font-mono: 'Space Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  --tracking-display: 0.08em;
+  --tracking-label: 0.12em;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 12px;
+  --scrollbar-gap: 8px;
+
+  --bg: #F6F2EA;
+  --panel: #FFFFFF;
+  --surface: #FFFFFF;
+  --surface-2: #FFF7EC;
+  --surface-3: #F2EADF;
+
+  --text: #111113;
+  --text-subtle: #2F2F36;
+  --text-2: #2F2F36;
+  --text-3: #575762;
+  --muted: #575762;
+
+  --border: #15151A;
+  --border-2: #0F0F14;
+
+  --accent: #1F5BFF;
+  --accent-strong: #1F5BFF;
+  --accent-soft: rgba(31, 91, 255, 0.18);
+  --accent-weak: rgba(31, 91, 255, 0.18);
+  --focus: rgba(31, 91, 255, 0.35);
+
+  --danger: #B42318;
+  --danger-weak: rgba(180, 35, 24, 0.12);
+  --success: #12b76a;
+  --success-soft: rgba(18, 183, 106, 0.16);
+  --success-bg: var(--success-soft);
+  --success-border: rgba(18, 183, 106, 0.4);
+  --warning: #f59e0b;
+  --warning-soft: rgba(245, 158, 11, 0.18);
+  --warning-bg: var(--warning-soft);
+  --warning-border: rgba(245, 158, 11, 0.42);
+
+  --shadow-1: 3px 3px 0 rgba(17, 17, 20, 0.9);
+  --shadow-2: 10px 10px 0 rgba(17, 17, 20, 0.9);
+  --shadow: var(--shadow-2);
+  --shadow-soft: var(--shadow-1);
+
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--text);
+  background-color: var(--bg);
+  color-scheme: light;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: inherit;
+}
+
+a:hover {
+  color: inherit;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+::selection {
+  background: var(--accent-weak);
+}
+
+button {
+  font-family: inherit;
+}
