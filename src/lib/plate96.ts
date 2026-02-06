@@ -25,6 +25,16 @@ export const plate96WellIdsColumnMajor = (() => {
   return wells
 })()
 
+export const toColumnMajorNumber96 = (wellId: WellId96): number => {
+  const row = wellId[0] as Plate96Row
+  const col = Number(wellId.slice(1)) as Plate96Col
+  const rowIdx = PLATE96_ROWS.indexOf(row)
+  const colIdx = PLATE96_COLS.indexOf(col)
+  // WellId96 guarantees this, but keep a sane fallback.
+  if (rowIdx < 0 || colIdx < 0) return 0
+  return colIdx * PLATE96_ROWS.length + rowIdx + 1
+}
+
 export const toWellIndex96 = (wellId: string): number | null => {
   const match = /^([A-H])\s*([1-9]|1[0-2])$/i.exec(wellId.trim())
   if (!match) return null

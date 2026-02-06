@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { parseElisaReaderText } from '../lib/elisaReader'
 import { type WellAssignment } from '../lib/layoutModel'
-import { plate96WellIds, type WellId96 } from '../lib/plate96'
+import { plate96WellIds, plate96WellIdsColumnMajor, toColumnMajorNumber96, type WellId96 } from '../lib/plate96'
 import { CurvePlot } from '../components/CurvePlot'
 import { fitPolynomial, invertPolyBySearch } from '../lib/polynomial'
 import { median } from '../lib/stats'
@@ -31,6 +31,7 @@ const fmt = (n: number | null) => (n === null ? '' : n.toFixed(4))
 
 export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWells }: AnalysisTabProps) {
   const [showOnlyAssigned, setShowOnlyAssigned] = useState(true)
+  const [tableOrder, setTableOrder] = useState<'columnMajor' | 'rowMajor'>('columnMajor')
   const [blankSubtract, setBlankSubtract] = useState(true)
   const [outlierThreshold, setOutlierThreshold] = useState(0.15)
   const [curveDegree, setCurveDegree] = useState<2 | 3>(2)
@@ -109,7 +110,8 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
   const blankOffset = blankSubtract && blankMedian !== null ? blankMedian : 0
 
   const rows: Row[] = useMemo(() => {
-    const items: Row[] = plate96WellIds.map((wellId) => {
+    const wellOrder = tableOrder === 'columnMajor' ? plate96WellIdsColumnMajor : plate96WellIds
+    const items: Row[] = wellOrder.map((wellId) => {
       const w = wells[wellId]
       const reading = parsed.wells[wellId]
       const net = reading?.net ?? null
@@ -157,7 +159,7 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
     }
 
     return items
-  }, [wells, parsed.wells, blankOffset, outlierThreshold])
+  }, [wells, parsed.wells, blankOffset, outlierThreshold, tableOrder])
 
   const filteredRows = useMemo(() => {
     if (!showOnlyAssigned) return rows
@@ -293,6 +295,32 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
     setStdConcMap(next)
   }
 
+  const copyNetTsv = async () => {
+    const headers = ['Idx', 'Well', '450', '570', '450-570', '450-570(blankMedian)']
+    const lines = [headers.join('\t')]
+
+    const blankForExport = blankMedian ?? 0
+    for (let i = 0; i < plate96WellIdsColumnMajor.length; i += 1) {
+      const wellId = plate96WellIdsColumnMajor[i]
+      const reading = parsed.wells[wellId]
+      const net = reading?.net ?? null
+      const corrected = net === null ? null : net - blankForExport
+      lines.push(
+        [
+          String(i + 1),
+          wellId,
+          fmt(reading?.a450 ?? null),
+          fmt(reading?.a570 ?? null),
+          fmt(net),
+          fmt(corrected),
+        ].join('\t')
+      )
+    }
+
+    await navigator.clipboard.writeText(lines.join('\n'))
+    alert('Net absorbance copied (TSV).')
+  }
+
   const copyQuantTsv = async () => {
     const headers = ['Well', 'AnimalId', 'Group', 'DilutionFactor', 'Net(blank)', 'Conc', 'ConcAdjusted']
     const lines = [headers.join('\t')]
@@ -369,6 +397,9 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
               <span className="badge">Assigned: {counts.assigned}</span>
               <span className="badge">Kept: {counts.kept}</span>
               <span className="badge">Outliers: {counts.outliers}</span>
+              <button className="ghost" type="button" onClick={copyNetTsv} disabled={!Object.keys(parsed.wells).length}>
+                Copy net TSV
+              </button>
             </div>
           </div>
 
@@ -376,6 +407,13 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
             <label className="control">
               <span>Show only assigned wells</span>
               <input type="checkbox" checked={showOnlyAssigned} onChange={(e) => setShowOnlyAssigned(e.target.checked)} />
+            </label>
+            <label className="control">
+              <span>Table order</span>
+              <select value={tableOrder} onChange={(e) => setTableOrder(e.target.value === 'rowMajor' ? 'rowMajor' : 'columnMajor')}>
+                <option value="columnMajor">Reader (A1..H1, A2..H2)</option>
+                <option value="rowMajor">Plate (A1..A12, B1..H12)</option>
+              </select>
             </label>
             <label className="control">
               <span>Blank subtract (median)</span>
@@ -398,12 +436,22 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
             </label>
           </div>
 
+          {showOnlyAssigned && counts.assigned === 0 && Object.keys(parsed.wells).length > 0 ? (
+            <div className="empty" role="note">
+              <p className="muted">
+                No wells are assigned yet. Either uncheck <strong>Show only assigned wells</strong> or go back to{' '}
+                <strong>Layout</strong> and fill/mark samples, standards, and blanks.
+              </p>
+            </div>
+          ) : null}
+
           <div className="table-wrap">
             <div className="table-scroll">
               <table className="data">
                 <thead>
                   <tr>
                     <th>keep</th>
+                    <th className="num">Idx</th>
                     <th>Well</th>
                     <th>Type</th>
                     <th>Animal</th>
@@ -430,6 +478,7 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
                             aria-label={`Keep ${r.wellId}`}
                           />
                         </td>
+                        <td className="num">{toColumnMajorNumber96(r.wellId)}</td>
                         <td>{r.wellId}</td>
                         <td>{r.type}</td>
                         <td>{r.animalId}</td>
