@@ -2,6 +2,7 @@ import './App.css'
 import { useEffect, useMemo, useState } from 'react'
 import { AnalysisTab } from './tabs/AnalysisTab'
 import { LayoutTab } from './tabs/LayoutTab'
+import { GuidedTutorial, type TutorialStep } from './GuidedTutorial'
 import { emptyLayout96, type WellAssignment } from './lib/layoutModel'
 import { plate96WellIds, type WellId96 } from './lib/plate96'
 import { readLocalJson, writeLocalJson } from './lib/storage'
@@ -51,6 +52,47 @@ function App() {
   const [wells, setWells] = useState<Record<WellId96, WellAssignment>>(() => hydrateWells(persisted?.wells))
   const [readerText, setReaderText] = useState<string>(persisted?.readerText ?? '')
 
+  const tutorialSteps: TutorialStep[] = useMemo(
+    () => [
+      {
+        selector: '[data-testid="layout-tab-btn"]',
+        title: 'Start with Layout',
+        description: 'Begin in the Layout tab to load sample metadata and assign wells.',
+      },
+      {
+        selector: '[data-testid="samples-card"]',
+        title: 'Fill the sample sheet',
+        description: 'Paste or load the sample table, then map columns to animal/group fields.',
+      },
+      {
+        selector: '[data-testid="fill-samples"]',
+        title: 'Populate plate wells',
+        description: 'Use Fill Samples to assign samples into currently empty wells automatically.',
+      },
+      {
+        selector: '[data-testid="analysis-tab-btn"]',
+        title: 'Switch to Analysis',
+        description: 'Move to Analysis to paste reader output and fit your standards.',
+      },
+      {
+        selector: '[data-testid="std-autoqc"]',
+        title: 'Review Auto-QC suggestions',
+        description: 'Inspect Auto-QC recommendations to improve standard-curve quality.',
+      },
+      {
+        selector: '[data-testid="std-autoqc-apply"]',
+        title: 'Apply suggestions',
+        description: 'Apply suggested standard exclusions before quantification if they improve fit.',
+      },
+      {
+        selector: '[data-testid="quant-card"]',
+        title: 'Inspect final quantities',
+        description: 'Review sample quantification results before copying or exporting outputs.',
+      },
+    ],
+    []
+  )
+
   // Keep persisted state in sync.
   useEffect(() => {
     const next: PersistedStateV1 = {
@@ -92,6 +134,7 @@ function App() {
             type="button"
             onClick={() => setTab('layout')}
             aria-selected={tab === 'layout'}
+            data-testid="layout-tab-btn"
           >
             Layout
           </button>
@@ -100,9 +143,15 @@ function App() {
             type="button"
             onClick={() => setTab('analysis')}
             aria-selected={tab === 'analysis'}
+            data-testid="analysis-tab-btn"
           >
             Analysis
           </button>
+          <GuidedTutorial
+            steps={tutorialSteps}
+            startLabel="Tutorial"
+            onStart={() => setTab('layout')}
+          />
         </div>
       </div>
 
