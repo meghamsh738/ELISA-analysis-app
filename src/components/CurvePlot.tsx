@@ -1,16 +1,22 @@
 import { evalPoly } from '../lib/polynomial'
+import { eval4pl, type FourPLParams } from '../lib/logistic4pl'
 
 type Point = { x: number; y: number }
 
+type CurveModel =
+  | { kind: 'poly'; coeff: number[] }
+  | { kind: '4pl'; params: FourPLParams }
+
 type Props = {
   points: Point[]
-  coeff: number[] | null
+  model: CurveModel | null
   title?: string
+  xScale?: 'linear' | 'log10'
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
-export function CurvePlot({ points, coeff, title }: Props) {
+export function CurvePlot({ points, model, title, xScale = 'linear' }: Props) {
   const width = 520
   const height = 320
   const pad = 44
@@ -18,30 +24,39 @@ export function CurvePlot({ points, coeff, title }: Props) {
   const xs = points.map((p) => p.x)
   const ys = points.map((p) => p.y)
 
-  const xMin = xs.length ? Math.min(...xs) : 0
-  const xMax = xs.length ? Math.max(...xs) : 1
+  const xTransform = (x: number) => {
+    if (xScale !== 'log10') return x
+    return Math.log10(Math.max(1e-12, x))
+  }
+
+  const xsT = xs.map(xTransform)
+
+  const xMinT = xsT.length ? Math.min(...xsT) : 0
+  const xMaxT = xsT.length ? Math.max(...xsT) : 1
   const yMin = ys.length ? Math.min(...ys) : 0
   const yMax = ys.length ? Math.max(...ys) : 1
 
-  const xSpan = xMax - xMin || 1
+  const xSpan = xMaxT - xMinT || 1
   const ySpan = yMax - yMin || 1
 
-  const x0 = xMin - xSpan * 0.08
-  const x1 = xMax + xSpan * 0.08
+  const x0T = xMinT - xSpan * 0.08
+  const x1T = xMaxT + xSpan * 0.08
   const y0 = yMin - ySpan * 0.12
   const y1 = yMax + ySpan * 0.12
 
-  const xScale = (x: number) => pad + ((x - x0) / (x1 - x0)) * (width - pad * 2)
+  const xToPxFromXT = (xT: number) => pad + ((xT - x0T) / (x1T - x0T)) * (width - pad * 2)
+  const xToPx = (x: number) => xToPxFromXT(xTransform(x))
   const yScale = (y: number) => height - pad - ((y - y0) / (y1 - y0)) * (height - pad * 2)
 
   const linePath = (() => {
-    if (!coeff) return ''
+    if (!model) return ''
     const steps = 180
     const pts: string[] = []
     for (let i = 0; i <= steps; i += 1) {
-      const x = x0 + (i / steps) * (x1 - x0)
-      const y = evalPoly(coeff, x)
-      const px = xScale(x)
+      const xT = x0T + (i / steps) * (x1T - x0T)
+      const x = xScale === 'log10' ? 10 ** xT : xT
+      const y = model.kind === 'poly' ? evalPoly(model.coeff, x) : eval4pl(model.params, x)
+      const px = xToPxFromXT(xT)
       const py = yScale(y)
       pts.push(`${i === 0 ? 'M' : 'L'} ${px.toFixed(2)} ${py.toFixed(2)}`)
     }
@@ -54,8 +69,19 @@ export function CurvePlot({ points, coeff, title }: Props) {
     return out
   }
 
-  const xTicks = ticks(x0, x1, 4)
+  const xTicksT = ticks(x0T, x1T, 4)
   const yTicks = ticks(y0, y1, 4)
+
+  const formatXT = (xT: number) => {
+    if (xScale !== 'log10') return clamp(xT, -1e9, 1e9).toFixed(1)
+    const conc = 10 ** xT
+    if (!Number.isFinite(conc)) return ''
+    if (conc >= 1000) return conc.toFixed(0)
+    if (conc >= 10) return conc.toFixed(0)
+    if (conc >= 1) return conc.toFixed(1)
+    if (conc >= 0.1) return conc.toFixed(2)
+    return conc.toExponential(1)
+  }
 
   return (
     <svg
@@ -75,11 +101,11 @@ export function CurvePlot({ points, coeff, title }: Props) {
       ) : null}
 
       {/* grid */}
-      {xTicks.map((t) => (
+      {xTicksT.map((t) => (
         <line
           key={`x-${t}`}
-          x1={xScale(t)}
-          x2={xScale(t)}
+          x1={xToPxFromXT(t)}
+          x2={xToPxFromXT(t)}
           y1={pad}
           y2={height - pad}
           stroke="rgba(17,17,20,0.08)"
@@ -101,13 +127,13 @@ export function CurvePlot({ points, coeff, title }: Props) {
       <line x1={pad} x2={pad} y1={pad} y2={height - pad} stroke="#111113" strokeWidth="2" />
 
       {/* curve */}
-      {coeff ? <path d={linePath} fill="none" stroke="#1F5BFF" strokeWidth="2.5" /> : null}
+      {model ? <path d={linePath} fill="none" stroke="#1F5BFF" strokeWidth="2.5" /> : null}
 
       {/* points */}
       {points.map((p, idx) => (
         <circle
           key={idx}
-          cx={xScale(p.x)}
+          cx={xToPx(p.x)}
           cy={yScale(p.y)}
           r={5.5}
           fill="#FF4D2E"
@@ -117,17 +143,17 @@ export function CurvePlot({ points, coeff, title }: Props) {
       ))}
 
       {/* tick labels */}
-      {xTicks.map((t) => (
+      {xTicksT.map((t) => (
         <text
           key={`xl-${t}`}
-          x={xScale(t)}
+          x={xToPxFromXT(t)}
           y={height - pad + 20}
           textAnchor="middle"
           fontSize="11"
           fontFamily="var(--font-mono)"
           fill="#2F2F36"
         >
-          {clamp(t, -1e9, 1e9).toFixed(1)}
+          {formatXT(t)}
         </text>
       ))}
       {yTicks.map((t) => (
@@ -168,4 +194,3 @@ export function CurvePlot({ points, coeff, title }: Props) {
     </svg>
   )
 }
-

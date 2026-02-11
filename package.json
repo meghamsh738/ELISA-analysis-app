@@ -24,6 +24,8 @@
     "desktop:dist": "npm run build && electron-builder"
   },
   "dependencies": {
+    "@fontsource/space-grotesk": "^5.2.10",
+    "@fontsource/space-mono": "^5.2.9",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

@@ -3,8 +3,10 @@ import { parseElisaReaderText } from '../lib/elisaReader'
 import { type WellAssignment } from '../lib/layoutModel'
 import { plate96WellIds, plate96WellIdsColumnMajor, toColumnMajorNumber96, type WellId96 } from '../lib/plate96'
 import { CurvePlot } from '../components/CurvePlot'
-import { fitPolynomial, invertPolyBySearch } from '../lib/polynomial'
+import { fitPolynomial, invertPolyBySearch, type PolyFit } from '../lib/polynomial'
+import { fit4pl, invert4pl, type FourPLFit } from '../lib/logistic4pl'
 import { median } from '../lib/stats'
+import { suggestStandardCurveExclusions } from '../lib/stdCurveAutoQc'
 
 export type AnalysisTabProps = {
   readerText: string
@@ -29,12 +31,17 @@ type Row = {
 
 const fmt = (n: number | null) => (n === null ? '' : n.toFixed(4))
 
+type CurveModel = '4pl' | 'poly'
+type CurveFit = { kind: 'poly'; fit: PolyFit } | { kind: '4pl'; fit: FourPLFit }
+
 export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWells }: AnalysisTabProps) {
   const [showOnlyAssigned, setShowOnlyAssigned] = useState(true)
   const [tableOrder, setTableOrder] = useState<'columnMajor' | 'rowMajor'>('columnMajor')
   const [blankSubtract, setBlankSubtract] = useState(true)
   const [outlierThreshold, setOutlierThreshold] = useState(0.15)
+  const [curveModel, setCurveModel] = useState<CurveModel>('4pl')
   const [curveDegree, setCurveDegree] = useState<2 | 3>(2)
+  const [useSuggestedStdExclusions, setUseSuggestedStdExclusions] = useState(false)
   const [serialTop, setSerialTop] = useState<number>(1000)
   const [serialFactor, setSerialFactor] = useState<number>(2)
   const [serialOrder, setSerialOrder] = useState<'highToLow' | 'lowToHigh'>('highToLow')
@@ -180,6 +187,30 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
     onChangeWells({ ...wells, [wellId]: { ...wells[wellId], keep } })
   }
 
+  const stdLevels = useMemo(() => {
+    const byLevel = new Map<string, Array<{ wellId: WellId96; y: number }>>()
+    for (const wellId of plate96WellIds) {
+      const w = wells[wellId]
+      if (w.type !== 'Standard' || !w.keep) continue
+      const lvl = (w.standardLevel ?? '').trim()
+      if (!lvl) continue
+      const net = parsed.wells[wellId]?.net ?? null
+      if (net === null || !Number.isFinite(net)) continue
+      const y = net - blankOffset
+      if (!Number.isFinite(y)) continue
+      const arr = byLevel.get(lvl) ?? []
+      arr.push({ wellId, y })
+      byLevel.set(lvl, arr)
+    }
+
+    return standardLevels.map((lvl) => {
+      const concRaw = stdConcMap[lvl]
+      const conc = Number.isFinite(concRaw) ? concRaw : null
+      const replicates = byLevel.get(lvl) ?? []
+      return { level: lvl, conc, replicates }
+    })
+  }, [blankOffset, parsed.wells, standardLevels, stdConcMap, wells])
+
   const stdPoints = useMemo(() => {
     const byLevel = new Map<string, number[]>()
     for (const wellId of plate96WellIds) {
@@ -210,18 +241,69 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
     return points
   }, [blankOffset, parsed.wells, wells, standardLevels, stdConcMap])
 
-  const polyFit = useMemo(() => {
-    const usable = stdPoints.filter((p) => p.conc !== null && p.mean !== null)
+  const stdAutoQc = useMemo(() => {
+    const inputs = stdLevels
+      .filter((l) => l.conc !== null && Number.isFinite(l.conc) && (l.conc as number) > 0)
+      .filter((l) => l.replicates.length > 0)
+      .map((l) => ({
+        level: l.level,
+        conc: l.conc as number,
+        replicates: l.replicates.map((r) => ({ wellId: r.wellId, y: r.y })),
+      }))
+
+    const curveKind = curveModel === '4pl' ? ({ kind: '4pl' } as const) : ({ kind: 'poly', degree: curveDegree } as const)
+    return suggestStandardCurveExclusions(inputs, curveKind)
+  }, [curveDegree, curveModel, stdLevels])
+
+  const hasSuggestedExclusions = stdAutoQc.actions.length > 0 && stdAutoQc.suggested !== null
+  const canToggleSuggested = hasSuggestedExclusions || useSuggestedStdExclusions
+  const applySuggested = useSuggestedStdExclusions && hasSuggestedExclusions
+
+  const stdFitPoints = useMemo(() => {
+    const excluded = applySuggested ? new Set(stdAutoQc.excludedWellIds) : new Set<string>()
+    const dropped = applySuggested ? new Set(stdAutoQc.droppedLevels) : new Set<string>()
+
+    const out: Array<{ level: string; conc: number; n: number; mean: number }> = []
+    for (const l of stdLevels) {
+      if (l.conc === null || !Number.isFinite(l.conc)) continue
+      if (dropped.has(l.level)) continue
+      const reps = l.replicates.filter((r) => !excluded.has(r.wellId))
+      if (!reps.length) continue
+      const mean = reps.reduce((acc, v) => acc + v.y, 0) / reps.length
+      out.push({ level: l.level, conc: l.conc, n: reps.length, mean })
+    }
+    return out
+  }, [applySuggested, stdAutoQc.droppedLevels, stdAutoQc.excludedWellIds, stdLevels])
+
+  const curveFit: CurveFit | null = useMemo(() => {
+    const usable = stdFitPoints
+      .map((p) => ({ x: p.conc, y: p.mean }))
+      .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y))
+
+    if (curveModel === '4pl') {
+      const clean = usable.filter((p) => p.x > 0)
+      if (clean.length < 4) return null
+      const fit = fit4pl(
+        clean.map((p) => p.x),
+        clean.map((p) => p.y),
+        { restarts: 3 }
+      )
+      return fit ? { kind: '4pl', fit } : null
+    }
+
     if (usable.length < curveDegree + 1) return null
-    const x = usable.map((p) => p.conc as number)
-    const y = usable.map((p) => p.mean as number)
-    return fitPolynomial(x, y, curveDegree)
-  }, [stdPoints, curveDegree])
+    const fit = fitPolynomial(
+      usable.map((p) => p.x),
+      usable.map((p) => p.y),
+      curveDegree
+    )
+    return fit ? { kind: 'poly', fit } : null
+  }, [curveDegree, curveModel, stdFitPoints])
 
   const sampleQuant = useMemo(() => {
-    if (!polyFit) return []
-    const usable = stdPoints.filter((p) => p.conc !== null && p.mean !== null)
-    const xVals = usable.map((p) => p.conc as number)
+    if (!curveFit) return []
+    const xVals = stdFitPoints.map((p) => p.conc).filter((v) => Number.isFinite(v) && v > 0)
+    if (!xVals.length) return []
     const minX = Math.min(...xVals)
     const maxX = Math.max(...xVals)
 
@@ -242,7 +324,10 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
       if (net === null || !Number.isFinite(net)) continue
 
       const netBlank = net - blankOffset
-      const conc = invertPolyBySearch(polyFit.coeff, netBlank, minX, maxX)
+      const conc =
+        curveFit.kind === 'poly'
+          ? invertPolyBySearch(curveFit.fit.coeff, netBlank, minX, maxX)
+          : invert4pl(curveFit.fit.params, netBlank, minX, maxX)
       const dilution = w.dilutionFactor && Number.isFinite(w.dilutionFactor) && w.dilutionFactor > 0 ? w.dilutionFactor : 1
       const concAdjusted = conc === null ? null : conc * dilution
 
@@ -258,7 +343,7 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
     }
 
     return out
-  }, [polyFit, stdPoints, wells, parsed.wells, blankOffset])
+  }, [curveFit, stdFitPoints, wells, parsed.wells, blankOffset])
 
   const sampleSummary = useMemo(() => {
     type Agg = { key: string; animalId: string; group: string; values: number[] }
@@ -502,35 +587,47 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
 
       <div className="shell">
         <section className="card" data-testid="curve-card">
-          <div className="section-head">
-            <div>
-              <p className="kicker">Step 3 · Standard curve</p>
-              <h2>Concentrations + polynomial fit</h2>
-              <p className="muted">
-                Standards are taken from wells marked <strong>Standard</strong> in the Layout tab. Use <strong>keep</strong> to drop
-                duplicates and improve curve fit.
-              </p>
-            </div>
-            <div className="row">
-              <span className="badge">Std levels: {standardLevels.length}</span>
-              <span className="badge">Degree: {curveDegree}</span>
-              {polyFit ? <span className="badge">R²: {Number.isFinite(polyFit.r2) ? polyFit.r2.toFixed(4) : 'NA'}</span> : null}
-            </div>
-          </div>
+	          <div className="section-head">
+	            <div>
+	              <p className="kicker">Step 3 · Standard curve</p>
+	              <h2>Concentrations + curve fit</h2>
+	              <p className="muted">
+	                Standards are taken from wells marked <strong>Standard</strong> in the Layout tab. Use <strong>keep</strong> to drop
+	                duplicates and improve curve fit, or enable suggested exclusions below.
+	              </p>
+	            </div>
+	            <div className="row">
+	              <span className="badge">Std levels: {standardLevels.length}</span>
+	              <span className="badge">Model: {curveModel === '4pl' ? '4PL' : `Poly deg ${curveDegree}`}</span>
+	              {curveFit ? (
+	                <span className="badge">R²: {Number.isFinite(curveFit.fit.r2) ? curveFit.fit.r2.toFixed(4) : 'NA'}</span>
+	              ) : null}
+	            </div>
+	          </div>
 
-          <div className="controls">
-            <label className="control">
-              <span>Polynomial degree</span>
-              <select value={curveDegree} onChange={(e) => setCurveDegree(Number(e.target.value) as 2 | 3)}>
-                <option value={2}>2 (quadratic)</option>
-                <option value={3}>3 (cubic)</option>
-              </select>
-            </label>
+	          <div className="controls">
+	            <label className="control">
+	              <span>Curve model</span>
+	              <select value={curveModel} onChange={(e) => setCurveModel(e.target.value === 'poly' ? 'poly' : '4pl')}>
+	                <option value="4pl">4PL (logistic)</option>
+	                <option value="poly">Polynomial</option>
+	              </select>
+	            </label>
+	
+	            {curveModel === 'poly' ? (
+	              <label className="control">
+	                <span>Polynomial degree</span>
+	                <select value={curveDegree} onChange={(e) => setCurveDegree(Number(e.target.value) as 2 | 3)}>
+	                  <option value={2}>2 (quadratic)</option>
+	                  <option value={3}>3 (cubic)</option>
+	                </select>
+	              </label>
+	            ) : null}
 
-            <label className="control">
-              <span>Serial top</span>
-              <input type="number" value={serialTop} min={0} step={1} onChange={(e) => setSerialTop(Number(e.target.value || '0'))} />
-            </label>
+	            <label className="control">
+	              <span>Serial top</span>
+	              <input type="number" value={serialTop} min={0} step={1} onChange={(e) => setSerialTop(Number(e.target.value || '0'))} />
+	            </label>
 
             <label className="control">
               <span>Dilution factor</span>
@@ -610,29 +707,111 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
                 </div>
               </div>
 
-              <div className="panel">
-                <h3>Fit preview</h3>
-                <div className="muted-small">
-                  Uses mean blank-corrected net absorbance per standard level. Requires at least {curveDegree + 1} standard levels
-                  with both concentration and absorbance.
-                </div>
-                <div style={{ height: 12 }} />
-                {polyFit ? (
-                  <>
-                    <CurvePlot
-                      title={`Polynomial fit (deg ${polyFit.degree})`}
-                      points={stdPoints.filter((p) => p.conc !== null && p.mean !== null).map((p) => ({ x: p.conc as number, y: p.mean as number }))}
-                      coeff={polyFit.coeff}
-                    />
-                    <div style={{ height: 12 }} />
-                    <div className="muted-small">
-                      Coefficients: y = {polyFit.coeff.map((c, idx) => `${c.toFixed(4)}·x^${idx}`).join(' + ')}
+	              <div className="panel">
+	                <h3>Fit preview</h3>
+	                <div className="muted-small">
+	                  Uses mean blank-corrected net absorbance per standard level. Requires at least{' '}
+	                  {curveModel === '4pl' ? 4 : curveDegree + 1} standard levels with both concentration and absorbance.
+	                </div>
+                  <div style={{ height: 12 }} />
+	                  <div className="helper" data-testid="std-autoqc">
+	                    <div className="muted-small">
+	                      <strong>Auto-QC (standards only):</strong>{' '}
+	                      {stdAutoQc.baseline === null
+	                        ? 'Need more usable standard points.'
+	                        : stdAutoQc.actions.length === 0
+	                          ? 'No exclusions suggested.'
+	                          : applySuggested
+	                            ? 'Suggested exclusions applied to fit + downstream calculations.'
+	                            : 'Suggested exclusions available (click Apply suggestions).'}
+	                    </div>
+	                    {stdAutoQc.baseline !== null ? (
+	                      <div className="muted-small" style={{ marginTop: 6 }}>
+	                        R² baseline: {Number.isFinite(stdAutoQc.baseline.r2) ? stdAutoQc.baseline.r2.toFixed(4) : 'NA'}
+	                        {stdAutoQc.suggested !== null ? (
+                          <>
+                            {' '}
+                            → suggested: {Number.isFinite(stdAutoQc.suggested.r2) ? stdAutoQc.suggested.r2.toFixed(4) : 'NA'} ·
+                            exclude wells: {stdAutoQc.excludedWellIds.length} · drop levels: {stdAutoQc.droppedLevels.length}
+                          </>
+	                        ) : null}
+	                      </div>
+	                    ) : null}
+                    <div className="button-row" style={{ marginTop: 8 }}>
+                      <button
+                        className="primary"
+                        type="button"
+                        onClick={() => setUseSuggestedStdExclusions(true)}
+                        disabled={!hasSuggestedExclusions}
+                        data-testid="std-autoqc-apply"
+                      >
+                        Apply suggestions
+                      </button>
+                      <button
+                        className="ghost"
+                        type="button"
+                        onClick={() => setUseSuggestedStdExclusions(false)}
+                        data-testid="std-autoqc-reset"
+                      >
+                        Use all kept standards
+                      </button>
                     </div>
-                  </>
-                ) : (
-                  <div className="muted">Not enough usable standard points to fit yet.</div>
-                )}
-              </div>
+                    <label className="toggle" style={{ marginTop: 8 }}>
+                      <input
+                        type="checkbox"
+                        checked={applySuggested}
+                        onChange={(e) => setUseSuggestedStdExclusions(e.target.checked && hasSuggestedExclusions)}
+                        disabled={!canToggleSuggested}
+                        data-testid="std-autoqc-toggle"
+                      />
+                      <span className="toggle-ui" />
+                      <span className="toggle-label">Apply Auto-QC exclusions to fit + downstream calculations</span>
+                    </label>
+	                    {stdAutoQc.actions.length > 0 ? (
+	                      <ul className="bullets">
+	                        {stdAutoQc.actions.map((a, idx) => (
+	                          <li key={`${a.type}||${idx}`}>
+	                            {a.type === 'exclude-replicate'
+                              ? `Exclude ${a.wellId} (${a.level}). ${a.reason}`
+                              : `Drop level ${a.level}. ${a.reason}`}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    <div className="muted-small" style={{ marginTop: 8 }}>
+                      Suggestions only affect the curve fit inputs (standards). They do not change the per-well <strong>keep</strong>{' '}
+                      checkboxes.
+                    </div>
+                  </div>
+	                <div style={{ height: 12 }} />
+	                {curveFit ? (
+	                  <>
+	                    <CurvePlot
+	                      title={curveFit.kind === 'poly' ? `Polynomial fit (deg ${curveFit.fit.degree})` : '4PL fit (log scale)'}
+	                      points={stdFitPoints.map((p) => ({ x: p.conc, y: p.mean }))}
+	                      model={
+	                        curveFit.kind === 'poly'
+	                          ? { kind: 'poly', coeff: curveFit.fit.coeff }
+	                          : { kind: '4pl', params: curveFit.fit.params }
+	                      }
+	                      xScale={curveFit.kind === '4pl' ? 'log10' : 'linear'}
+	                    />
+	                    <div style={{ height: 12 }} />
+	                    {curveFit.kind === 'poly' ? (
+	                      <div className="muted-small">
+	                        Coefficients: y = {curveFit.fit.coeff.map((c, idx) => `${c.toFixed(4)}·x^${idx}`).join(' + ')}
+	                      </div>
+	                    ) : (
+	                      <div className="muted-small">
+	                        Params: A={curveFit.fit.params.A.toFixed(4)} · D={curveFit.fit.params.D.toFixed(4)} · EC50=
+	                        {(10 ** curveFit.fit.params.C).toFixed(4)} · Hill={curveFit.fit.params.B.toFixed(3)}
+	                      </div>
+	                    )}
+	                  </>
+	                ) : (
+	                  <div className="muted">Not enough usable standard points to fit yet.</div>
+	                )}
+	              </div>
             </div>
           )}
         </section>
@@ -640,15 +819,15 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
 
       <div className="shell">
         <section className="card" data-testid="quant-card">
-          <div className="section-head">
-            <div>
-              <p className="kicker">Step 4 · Quantify</p>
-              <h2>Sample concentrations</h2>
-              <p className="muted">
-                Concentrations are computed by inverting the polynomial fit within the standard range, then multiplying by the well’s
-                dilution factor.
-              </p>
-            </div>
+	          <div className="section-head">
+	            <div>
+	              <p className="kicker">Step 4 · Quantify</p>
+	              <h2>Sample concentrations</h2>
+	              <p className="muted">
+	                Concentrations are computed by inverting the fitted curve within the standard range, then multiplying by the well’s
+	                dilution factor.
+	              </p>
+	            </div>
             <div className="row">
               <span className="badge">Wells: {sampleQuant.length}</span>
               <span className="badge">Animals: {sampleSummary.length}</span>
@@ -658,11 +837,11 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
             </div>
           </div>
 
-          {!polyFit ? (
-            <div className="empty">
-              <p className="muted">Fit a standard curve first.</p>
-            </div>
-          ) : (
+	          {!curveFit ? (
+	            <div className="empty">
+	              <p className="muted">Fit a standard curve first.</p>
+	            </div>
+	          ) : (
             <div className="grid-2">
               <div className="table-wrap">
                 <div className="table-scroll">
