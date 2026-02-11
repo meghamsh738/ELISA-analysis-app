@@ -5,10 +5,13 @@ import { fileURLToPath } from 'node:url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-// Keep Playwright browser downloads inside the repo so:
+// Keep Playwright browser downloads inside the repo by default so:
 // - WSL doesn't try to write to an unwritable global cache path
-// - the setup is predictable across machines/CI.
-process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(__dirname, '.playwright-browsers')
+// - setup is predictable across machines/CI.
+// Allow override from environment for shared browser caches.
+if (!process.env.PLAYWRIGHT_BROWSERS_PATH) {
+  process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(__dirname, '.playwright-browsers')
+}
 
 const isWindows = process.platform === 'win32'
 const port = 5181

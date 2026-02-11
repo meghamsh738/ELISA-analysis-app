@@ -6,4 +6,6 @@ export default defineConfig({
   plugins: [react()],
   // Required for file:// loading in Electron (assets resolve relatively in prod builds).
   base: './',
+  // Avoid drvfs copyfile EPERM on Windows-mounted drives during public asset copy.
+  publicDir: false,
 })
