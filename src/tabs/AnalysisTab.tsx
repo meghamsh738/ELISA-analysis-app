@@ -450,6 +450,7 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
             value={readerText}
             onChange={(e) => onChangeReaderText(e.target.value)}
             placeholder="Paste ELISA reader output here…"
+            data-testid="reader-textarea"
           />
 
           {parsed.warnings.length > 0 && (
@@ -482,7 +483,13 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
               <span className="badge">Assigned: {counts.assigned}</span>
               <span className="badge">Kept: {counts.kept}</span>
               <span className="badge">Outliers: {counts.outliers}</span>
-              <button className="ghost" type="button" onClick={copyNetTsv} disabled={!Object.keys(parsed.wells).length}>
+              <button
+                className="ghost"
+                type="button"
+                onClick={copyNetTsv}
+                disabled={!Object.keys(parsed.wells).length}
+                data-testid="copy-net-tsv-btn"
+              >
                 Copy net TSV
               </button>
             </div>
@@ -491,11 +498,20 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
           <div className="controls">
             <label className="control">
               <span>Show only assigned wells</span>
-              <input type="checkbox" checked={showOnlyAssigned} onChange={(e) => setShowOnlyAssigned(e.target.checked)} />
+              <input
+                type="checkbox"
+                checked={showOnlyAssigned}
+                onChange={(e) => setShowOnlyAssigned(e.target.checked)}
+                data-testid="show-assigned-toggle"
+              />
             </label>
             <label className="control">
               <span>Table order</span>
-              <select value={tableOrder} onChange={(e) => setTableOrder(e.target.value === 'rowMajor' ? 'rowMajor' : 'columnMajor')}>
+              <select
+                value={tableOrder}
+                onChange={(e) => setTableOrder(e.target.value === 'rowMajor' ? 'rowMajor' : 'columnMajor')}
+                data-testid="table-order-select"
+              >
                 <option value="columnMajor">Reader (A1..H1, A2..H2)</option>
                 <option value="rowMajor">Plate (A1..A12, B1..H12)</option>
               </select>
@@ -507,6 +523,7 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
                 checked={blankSubtract}
                 onChange={(e) => setBlankSubtract(e.target.checked)}
                 disabled={blanks.length === 0}
+                data-testid="blank-subtract-toggle"
               />
             </label>
             <label className="control">
@@ -517,6 +534,7 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
                 min={0}
                 step={0.01}
                 onChange={(e) => setOutlierThreshold(Number(e.target.value || '0'))}
+                data-testid="outlier-threshold-input"
               />
             </label>
           </div>
@@ -608,7 +626,7 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
 	          <div className="controls">
 	            <label className="control">
 	              <span>Curve model</span>
-	              <select value={curveModel} onChange={(e) => setCurveModel(e.target.value === 'poly' ? 'poly' : '4pl')}>
+	              <select value={curveModel} onChange={(e) => setCurveModel(e.target.value === 'poly' ? 'poly' : '4pl')} data-testid="curve-model-select">
 	                <option value="4pl">4PL (logistic)</option>
 	                <option value="poly">Polynomial</option>
 	              </select>
@@ -617,7 +635,7 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
 	            {curveModel === 'poly' ? (
 	              <label className="control">
 	                <span>Polynomial degree</span>
-	                <select value={curveDegree} onChange={(e) => setCurveDegree(Number(e.target.value) as 2 | 3)}>
+	                <select value={curveDegree} onChange={(e) => setCurveDegree(Number(e.target.value) as 2 | 3)} data-testid="curve-degree-select">
 	                  <option value={2}>2 (quadratic)</option>
 	                  <option value={3}>3 (cubic)</option>
 	                </select>
@@ -626,7 +644,7 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
 
 	            <label className="control">
 	              <span>Serial top</span>
-	              <input type="number" value={serialTop} min={0} step={1} onChange={(e) => setSerialTop(Number(e.target.value || '0'))} />
+	              <input type="number" value={serialTop} min={0} step={1} onChange={(e) => setSerialTop(Number(e.target.value || '0'))} data-testid="serial-top-input" />
 	            </label>
 
             <label className="control">
@@ -637,6 +655,7 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
                 min={1}
                 step={0.5}
                 onChange={(e) => setSerialFactor(Number(e.target.value || '1'))}
+                data-testid="serial-factor-input"
               />
             </label>
 
@@ -645,6 +664,7 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
               <select
                 value={serialOrder}
                 onChange={(e) => setSerialOrder(e.target.value === 'lowToHigh' ? 'lowToHigh' : 'highToLow')}
+                data-testid="serial-order-select"
               >
                 <option value="highToLow">Std1 highest → StdN lowest</option>
                 <option value="lowToHigh">Std1 lowest → StdN highest</option>
@@ -658,7 +678,13 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
               {blankSubtract && blanks.length ? 'on' : 'off'}
             </div>
             <div className="row">
-              <button className="ghost" type="button" onClick={fillStdSerialDilution} disabled={!standardLevels.length}>
+              <button
+                className="ghost"
+                type="button"
+                onClick={fillStdSerialDilution}
+                disabled={!standardLevels.length}
+                data-testid="fill-serial-btn"
+              >
                 Fill serial dilution
               </button>
             </div>
@@ -831,7 +857,13 @@ export function AnalysisTab({ readerText, onChangeReaderText, wells, onChangeWel
             <div className="row">
               <span className="badge">Wells: {sampleQuant.length}</span>
               <span className="badge">Animals: {sampleSummary.length}</span>
-              <button className="ghost" type="button" onClick={copyQuantTsv} disabled={!sampleQuant.length}>
+              <button
+                className="ghost"
+                type="button"
+                onClick={copyQuantTsv}
+                disabled={!sampleQuant.length}
+                data-testid="copy-quant-tsv-btn"
+              >
                 Copy quantified TSV
               </button>
             </div>

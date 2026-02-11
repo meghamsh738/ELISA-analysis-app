@@ -365,6 +365,7 @@ export function LayoutTab({
                 type="checkbox"
                 checked={sampleHasHeader}
                 onChange={(e) => onChangeSampleHasHeader(e.target.checked)}
+                data-testid="sample-header-toggle"
               />
               <span className="toggle-ui" />
               <span className="toggle-label">First row is headers</span>
@@ -382,7 +383,7 @@ export function LayoutTab({
             <div className="controls">
               <label className="control">
                 <span>Animal ID column</span>
-                <select value={animalIdCol} onChange={(e) => onChangeAnimalIdCol(Number(e.target.value))}>
+                <select value={animalIdCol} onChange={(e) => onChangeAnimalIdCol(Number(e.target.value))} data-testid="animal-id-col-select">
                   {table.headers.map((h, idx) => (
                     <option key={h + idx} value={idx}>
                       {h}
@@ -392,7 +393,7 @@ export function LayoutTab({
               </label>
               <label className="control">
                 <span>Group column (optional)</span>
-                <select value={groupCol} onChange={(e) => onChangeGroupCol(Number(e.target.value))}>
+                <select value={groupCol} onChange={(e) => onChangeGroupCol(Number(e.target.value))} data-testid="group-col-select">
                   <option value={-1}>&lt;none&gt;</option>
                   {table.headers.map((h, idx) => (
                     <option key={h + idx} value={idx}>
@@ -403,7 +404,7 @@ export function LayoutTab({
               </label>
               <label className="control">
                 <span>Dilution column (optional)</span>
-                <select value={dilutionCol} onChange={(e) => onChangeDilutionCol(Number(e.target.value))}>
+                <select value={dilutionCol} onChange={(e) => onChangeDilutionCol(Number(e.target.value))} data-testid="dilution-col-select">
                   <option value={-1}>&lt;none&gt;</option>
                   {table.headers.map((h, idx) => (
                     <option key={h + idx} value={idx}>
@@ -455,7 +456,13 @@ export function LayoutTab({
             </div>
             <div className="row">
               <span className="badge">Selected: {selected.size}</span>
-              <button className="ghost" type="button" onClick={copyLayoutTsv} disabled={!Object.keys(wells).length}>
+              <button
+                className="ghost"
+                type="button"
+                onClick={copyLayoutTsv}
+                disabled={!Object.keys(wells).length}
+                data-testid="copy-layout-tsv-btn"
+              >
                 Copy layout TSV
               </button>
             </div>
@@ -476,8 +483,15 @@ export function LayoutTab({
                   onChange={(e) => setStdLevel(e.target.value)}
                   placeholder="Std1"
                   aria-label="Standard level"
+                  data-testid="std-level-input"
                 />
-                <button className="ghost" type="button" onClick={() => markSelectedAs('Standard')} disabled={!selected.size}>
+                <button
+                  className="ghost"
+                  type="button"
+                  onClick={() => markSelectedAs('Standard')}
+                  disabled={!selected.size}
+                  data-testid="assign-standards-btn"
+                >
                   Assign Standards
                 </button>
               </div>
@@ -489,10 +503,22 @@ export function LayoutTab({
               </div>
 
               <div className="field-row">
-                <button className="ghost" type="button" onClick={() => markSelectedAs('Blank')} disabled={!selected.size}>
+                <button
+                  className="ghost"
+                  type="button"
+                  onClick={() => markSelectedAs('Blank')}
+                  disabled={!selected.size}
+                  data-testid="mark-blank-btn"
+                >
                   Mark Blank
                 </button>
-                <button className="ghost" type="button" onClick={() => markSelectedAs('Empty')} disabled={!selected.size}>
+                <button
+                  className="ghost"
+                  type="button"
+                  onClick={() => markSelectedAs('Empty')}
+                  disabled={!selected.size}
+                  data-testid="clear-wells-btn"
+                >
                   Clear wells
                 </button>
               </div>
@@ -507,6 +533,7 @@ export function LayoutTab({
                   min={0}
                   step={0.1}
                   aria-label="Dilution factor"
+                  data-testid="sample-dilution-input"
                 />
                 <input
                   type="text"
@@ -514,8 +541,15 @@ export function LayoutTab({
                   onChange={(e) => setGroupOverride(e.target.value)}
                   placeholder="Group override (optional)"
                   aria-label="Group override"
+                  data-testid="group-override-input"
                 />
-                <button className="ghost" type="button" onClick={applySampleTags} disabled={!selected.size}>
+                <button
+                  className="ghost"
+                  type="button"
+                  onClick={applySampleTags}
+                  disabled={!selected.size}
+                  data-testid="apply-tags-btn"
+                >
                   Apply tags
                 </button>
               </div>

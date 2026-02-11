@@ -56,38 +56,142 @@ function App() {
     () => [
       {
         selector: '[data-testid="layout-tab-btn"]',
-        title: 'Start with Layout',
-        description: 'Begin in the Layout tab to load sample metadata and assign wells.',
+        title: 'Start in Layout tab',
+        description: 'Begin all runs in Layout: sample mapping, plate assignment, and standard/blank marking.',
+        details: [
+          'Layout defines which wells are Sample, Standard, Blank, or Empty.',
+          'Analysis depends on these assignments.',
+        ],
       },
       {
         selector: '[data-testid="samples-card"]',
-        title: 'Fill the sample sheet',
-        description: 'Paste or load the sample table, then map columns to animal/group fields.',
+        title: 'Paste sample table',
+        description: 'Paste your source table and choose whether the first row contains headers.',
+        details: [
+          'Animal ID column is required for identifying samples.',
+          'Group and dilution columns are optional metadata.',
+        ],
+      },
+      {
+        selector: '[data-testid="sample-header-toggle"]',
+        title: 'First-row header option',
+        description: 'Enable this only if your first row contains column names.',
+        details: [
+          'Incorrect header setting shifts parsed values into wrong fields.',
+        ],
+      },
+      {
+        selector: '[data-testid="animal-id-col-select"]',
+        title: 'Animal ID column mapping',
+        description: 'Choose which pasted column represents the sample identifier.',
+        details: [
+          'Animal ID appears on the plate and in quantified output.',
+        ],
+      },
+      {
+        selector: '[data-testid="group-col-select"]',
+        title: 'Group column mapping (optional)',
+        description: 'Assign treatment/group metadata if present in your sheet.',
+      },
+      {
+        selector: '[data-testid="dilution-col-select"]',
+        title: 'Dilution column mapping (optional)',
+        description: 'Map pre-existing dilution factors from your sample sheet when available.',
       },
       {
         selector: '[data-testid="fill-samples"]',
-        title: 'Populate plate wells',
-        description: 'Use Fill Samples to assign samples into currently empty wells automatically.',
+        title: 'Fill empty wells',
+        description: 'Automatically places mapped samples into currently empty wells.',
+        details: [
+          'Use after column mapping is correct.',
+          'Manual edits can still be applied afterward.',
+        ],
+      },
+      {
+        selector: '[data-testid="std-level-input"]',
+        title: 'Standard level naming',
+        description: 'Enter starting level (e.g., Std1) before assigning selected wells as standards.',
+      },
+      {
+        selector: '[data-testid="assign-standards-btn"]',
+        title: 'Assign standards',
+        description: 'Marks selected wells as standards and auto-pairs duplicate levels.',
+      },
+      {
+        selector: '[data-testid="mark-blank-btn"]',
+        title: 'Mark blanks',
+        description: 'Assign blank wells used for optional blank-median subtraction.',
+      },
+      {
+        selector: '[data-testid="apply-tags-btn"]',
+        title: 'Apply sample tags',
+        description: 'Apply dilution factor and optional group override to selected sample wells.',
       },
       {
         selector: '[data-testid="analysis-tab-btn"]',
-        title: 'Switch to Analysis',
-        description: 'Move to Analysis to paste reader output and fit your standards.',
+        title: 'Switch to Analysis tab',
+        description: 'After layout is ready, move to Analysis for reader paste, QC, fit, and quantification.',
+      },
+      {
+        selector: '[data-testid="reader-textarea"]',
+        title: 'Paste reader output',
+        description: 'Paste raw 450/570 output from your plate reader.',
+        details: [
+          'App computes net absorbance (450 - 570).',
+        ],
+      },
+      {
+        selector: '[data-testid="show-assigned-toggle"]',
+        title: 'Show only assigned wells',
+        description: 'Filters review table to wells that were assigned in Layout.',
+      },
+      {
+        selector: '[data-testid="blank-subtract-toggle"]',
+        title: 'Blank subtraction option',
+        description: 'Applies blank median correction before curve fit/quantification when blanks are present.',
+      },
+      {
+        selector: '[data-testid="outlier-threshold-input"]',
+        title: 'Outlier threshold',
+        description: 'Controls sensitivity of replicate outlier flagging in per-well review.',
+      },
+      {
+        selector: '[data-testid="curve-model-select"]',
+        title: 'Curve model',
+        description: 'Choose 4PL or polynomial model for standard-curve fitting.',
+      },
+      {
+        selector: '[data-testid="serial-top-input"]',
+        title: 'Serial dilution defaults',
+        description: 'Set serial top/factor/order to prefill standard concentrations quickly.',
+      },
+      {
+        selector: '[data-testid="fill-serial-btn"]',
+        title: 'Fill serial dilution',
+        description: 'Populates concentration values for standard levels based on serial settings.',
       },
       {
         selector: '[data-testid="std-autoqc"]',
-        title: 'Review Auto-QC suggestions',
-        description: 'Inspect Auto-QC recommendations to improve standard-curve quality.',
+        title: 'Auto-QC suggestions',
+        description: 'Review suggested standard exclusions to improve fit quality.',
+        details: [
+          'Suggestions only affect fit inputs, not raw keep flags.',
+        ],
       },
       {
         selector: '[data-testid="std-autoqc-apply"]',
-        title: 'Apply suggestions',
-        description: 'Apply suggested standard exclusions before quantification if they improve fit.',
+        title: 'Apply Auto-QC exclusions',
+        description: 'Applies suggested exclusions to curve fitting and downstream calculations.',
       },
       {
         selector: '[data-testid="quant-card"]',
-        title: 'Inspect final quantities',
-        description: 'Review sample quantification results before copying or exporting outputs.',
+        title: 'Quantification results',
+        description: 'Review per-well concentrations and per-animal summary statistics.',
+      },
+      {
+        selector: '[data-testid="copy-quant-tsv-btn"]',
+        title: 'Copy quantified output (final step)',
+        description: 'Copy quantified TSV after reviewing fit and sample summaries.',
       },
     ],
     []
