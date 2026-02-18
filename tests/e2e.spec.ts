@@ -71,6 +71,8 @@ test('ELISA app renders layout + analysis tabs', async ({ page }) => {
   await expect(page.getByTestId('layout-tab')).toBeVisible()
   await analysisTab.click()
   await expect(page.getByTestId('analysis-tab')).toBeVisible()
+  await expect(page.getByLabel('Curve model')).toHaveValue('poly')
+  await expect(page.getByLabel('Dilution factor')).toHaveValue('10')
 
   // Smoke screenshot for visual regression.
   await expect(page).toHaveScreenshot('app_overview.png', { fullPage: true })
