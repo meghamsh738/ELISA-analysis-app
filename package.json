@@ -24,6 +24,8 @@
     "desktop:dist": "npm run build && electron-builder"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.2.7",
+    "@fontsource/ibm-plex-sans": "^5.2.8",
     "@fontsource/space-grotesk": "^5.2.10",
     "@fontsource/space-mono": "^5.2.9",
     "react": "^19.2.0",
