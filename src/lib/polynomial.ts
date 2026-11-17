@@ -4,6 +4,14 @@ export type PolyFit = {
   r2: number
 }
 
+export type ScaledPolyFit = {
+  degree: number
+  coeff: number[] // Polynomial coefficients on t = (x - xCenter) / xScale.
+  xCenter: number
+  xScale: number
+  r2: number
+}
+
 const isFiniteNumber = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n)
 
 const r2Score = (y: number[], yHat: number[]): number => {
@@ -92,48 +100,89 @@ export const fitPolynomial = (x: number[], y: number[], degree: number): PolyFit
   return { degree, coeff, r2 }
 }
 
+/** Fit in a centered/scaled concentration coordinate to reduce conditioning errors. */
+export const fitPolynomialScaled = (x: number[], y: number[], degree: number): ScaledPolyFit | null => {
+  const clean: Array<{ x: number; y: number }> = []
+  for (let i = 0; i < Math.min(x.length, y.length); i += 1) {
+    if (isFiniteNumber(x[i]) && isFiniteNumber(y[i])) clean.push({ x: x[i], y: y[i] })
+  }
+  if (clean.length < degree + 1 || !Number.isInteger(degree) || degree < 1) return null
+  const minX = Math.min(...clean.map((pt) => pt.x))
+  const maxX = Math.max(...clean.map((pt) => pt.x))
+  const xCenter = (minX + maxX) / 2
+  const xScale = (maxX - minX) / 2
+  if (!Number.isFinite(xCenter) || !Number.isFinite(xScale) || xScale <= 0) return null
+  const normalizedX = clean.map((pt) => (pt.x - xCenter) / xScale)
+  const fit = fitPolynomial(normalizedX, clean.map((pt) => pt.y), degree)
+  if (!fit) return null
+  return { degree, coeff: fit.coeff, xCenter, xScale, r2: fit.r2 }
+}
+
+export const evalScaledPolynomial = (fit: ScaledPolyFit, x: number): number =>
+  evalPoly(fit.coeff, (x - fit.xCenter) / fit.xScale)
+
+/** Return the polynomial's direction over an interval, or null if it turns or is flat. */
+export const polynomialDirection = (coeff: number[], minX: number, maxX: number): 'increasing' | 'decreasing' | null => {
+  if (!Number.isFinite(minX) || !Number.isFinite(maxX) || maxX <= minX || coeff.length < 2 || coeff.length > 4) return null
+  if (!coeff.every(Number.isFinite)) return null
+
+  // The derivative of a cubic is quadratic, so its real roots partition the
+  // interval into sections where the derivative cannot change sign.
+  const derivative = coeff.slice(1).map((value, index) => value * (index + 1))
+  while (derivative.length > 1 && Math.abs(derivative[derivative.length - 1]) < 1e-15) derivative.pop()
+  const candidates = [minX, maxX]
+  const addRoot = (root: number) => {
+    if (Number.isFinite(root) && root > minX && root < maxX) candidates.push(root)
+  }
+
+  if (derivative.length === 2) {
+    if (Math.abs(derivative[1]) > 1e-15) addRoot(-derivative[0] / derivative[1])
+  } else if (derivative.length === 3) {
+    const [c, b, a] = derivative
+    const discriminant = b * b - 4 * a * c
+    if (discriminant >= 0 && Math.abs(a) > 1e-15) {
+      const rootDisc = Math.sqrt(discriminant)
+      addRoot((-b - rootDisc) / (2 * a))
+      addRoot((-b + rootDisc) / (2 * a))
+    }
+  }
+
+  candidates.sort((a, b) => a - b)
+  let direction: 'increasing' | 'decreasing' | null = null
+  for (let index = 0; index < candidates.length - 1; index += 1) {
+    const x = (candidates[index] + candidates[index + 1]) / 2
+    const slope = derivative.reduce((sum, value, power) => sum + value * x ** power, 0)
+    if (!Number.isFinite(slope) || Math.abs(slope) <= 1e-14) return null
+    const current = slope > 0 ? 'increasing' : 'decreasing'
+    if (direction !== null && direction !== current) return null
+    direction = current
+  }
+  return direction
+}
+
 export const invertPolyBySearch = (coeff: number[], y: number, minX: number, maxX: number): number | null => {
   if (!Number.isFinite(y) || !Number.isFinite(minX) || !Number.isFinite(maxX)) return null
   if (maxX <= minX) return null
+  const direction = polynomialDirection(coeff, minX, maxX)
+  if (!direction) return null
+  const atMin = evalPoly(coeff, minX)
+  const atMax = evalPoly(coeff, maxX)
+  const lowResponse = Math.min(atMin, atMax)
+  const highResponse = Math.max(atMin, atMax)
+  const tolerance = 1e-12 * Math.max(1, Math.abs(lowResponse), Math.abs(highResponse), Math.abs(y))
+  if (y < lowResponse - tolerance || y > highResponse + tolerance) return null
+  if (Math.abs(y - atMin) <= tolerance) return minX
+  if (Math.abs(y - atMax) <= tolerance) return maxX
 
-  const clamp = (v: number) => Math.min(maxX, Math.max(minX, v))
-  const err = (x: number) => {
-    const yHat = evalPoly(coeff, x)
-    const e = yHat - y
-    return e * e
+  let lo = minX
+  let hi = maxX
+  for (let iteration = 0; iteration < 100; iteration += 1) {
+    const middle = (lo + hi) / 2
+    const response = evalPoly(coeff, middle)
+    if (Math.abs(response - y) <= tolerance) return middle
+    if ((direction === 'increasing' && response < y) || (direction === 'decreasing' && response > y)) lo = middle
+    else hi = middle
   }
-
-  // Coarse scan.
-  const steps = 600
-  let bestX = minX
-  let bestErr = err(minX)
-  for (let i = 1; i <= steps; i += 1) {
-    const x0 = minX + (i / steps) * (maxX - minX)
-    const e0 = err(x0)
-    if (e0 < bestErr) {
-      bestErr = e0
-      bestX = x0
-    }
-  }
-
-  // Local refine.
-  let step = (maxX - minX) / 20
-  for (let iter = 0; iter < 28; iter += 1) {
-    const a = clamp(bestX - step)
-    const b = clamp(bestX + step)
-    const ea = err(a)
-    const eb = err(b)
-    if (ea < bestErr) {
-      bestErr = ea
-      bestX = a
-    }
-    if (eb < bestErr) {
-      bestErr = eb
-      bestX = b
-    }
-    step *= 0.5
-  }
-
-  return bestX
+  return (lo + hi) / 2
 }
 

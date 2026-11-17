@@ -115,6 +115,7 @@ export function LayoutTab({
   onChangeWells,
 }: LayoutTabProps) {
   const [selected, setSelected] = useState<Set<WellId96>>(new Set())
+  const [layoutMessage, setLayoutMessage] = useState('')
   const [lastClicked, setLastClicked] = useState<WellId96 | null>(null)
   const didAutoGuessDilution = useRef(false)
 
@@ -132,7 +133,7 @@ export function LayoutTab({
     if (dilutionCol >= table.headers.length) onChangeDilutionCol(-1)
     if (dilutionCol < -1) onChangeDilutionCol(-1)
     if (dilutionCol === -1 && !didAutoGuessDilution.current) {
-      const guess = guessColumnIndex(table, 'dilutionFactor')
+      const guess = table.headers.findIndex(h => /^(dilution|dilution factor|dilution_factor|dilutionfactor|df)$/i.test(h.trim()))
       if (guess >= 0) onChangeDilutionCol(guess)
       didAutoGuessDilution.current = true
     }
@@ -231,10 +232,12 @@ export function LayoutTab({
 
   const fillSamplesIntoEmpty = () => {
     if (!table.rows.length) return
+    if (table.rows.some(row => !(row[animalIdCol] ?? '').trim())) { setLayoutMessage('Every sample row needs a sample ID. Correct the visible source table before filling wells.'); return }
     const next = { ...wells }
 
     // Most wet-lab workflows fill plates by column (A1..H1, then A2..H2, etc).
     const emptyWellIds = plate96WellIdsColumnMajor.filter((id) => next[id].type === 'Empty')
+    if (table.rows.length > emptyWellIds.length) { setLayoutMessage(`There are ${table.rows.length} sample rows and ${emptyWellIds.length} empty wells. Make space before filling.`); return }
     let cursor = 0
     let dilutionParseFailures = 0
 
@@ -246,7 +249,7 @@ export function LayoutTab({
       const group = groupCol >= 0 ? (row[groupCol] ?? '').trim() : ''
       const dilutionRaw = dilutionCol >= 0 ? (row[dilutionCol] ?? '').trim() : ''
       const parsedDilution = dilutionCol >= 0 ? parseDilutionFactor(dilutionRaw) : null
-      const dilutionFactor = parsedDilution && parsedDilution > 0 ? parsedDilution : 1
+      const dilutionFactor = parsedDilution ?? (dilutionRaw ? undefined : 1)
       if (dilutionCol >= 0 && dilutionRaw && parsedDilution === null) dilutionParseFailures += 1
       const meta: Record<string, string> = {}
       table.headers.forEach((h, idx) => {
@@ -266,13 +269,14 @@ export function LayoutTab({
         animalId,
         group: group || undefined,
         dilutionFactor,
+        dilutionText: dilutionRaw || '1',
         meta,
       }
     }
 
     onChangeWells(next)
     if (dilutionParseFailures > 0) {
-      alert(`Could not parse ${dilutionParseFailures} dilution value(s); defaulted to 1 for those rows.`)
+      setLayoutMessage(`Could not parse ${dilutionParseFailures} dilution value(s); retained the original text for correction before quantification.`)
     }
   }
 
@@ -308,7 +312,8 @@ export function LayoutTab({
       if (w.type !== 'Sample') return
       next[wellId] = {
         ...w,
-        dilutionFactor: Number.isFinite(dilutionFactor) && dilutionFactor > 0 ? dilutionFactor : w.dilutionFactor,
+        dilutionFactor: Number.isFinite(dilutionFactor) && dilutionFactor > 0 ? dilutionFactor : undefined,
+        dilutionText: String(dilutionFactor),
         group: groupOverride.trim() ? groupOverride.trim() : w.group,
       }
     })
@@ -320,7 +325,7 @@ export function LayoutTab({
       new Set(Object.values(wells).flatMap((w) => (w.meta ? Object.keys(w.meta) : [])))
     ).sort()
 
-    const headers = ['Well', 'Type', 'AnimalId', 'Group', 'DilutionFactor', 'StandardLevel', 'Keep', ...metaKeys]
+    const headers = ['Well', 'Type', 'SampleId', 'Group', 'DilutionFactor', 'StandardLevel', 'Keep', ...metaKeys]
     const lines = [headers.join('\t')]
     plate96WellIds.forEach((wellId) => {
       const w = wells[wellId]
@@ -342,6 +347,7 @@ export function LayoutTab({
 
   return (
     <div data-testid="layout-tab">
+      {layoutMessage && <p role="status" className="warning">{layoutMessage}</p>}
       <div className="shell grid-2 tall">
         <section className="card" data-testid="samples-card">
           <div className="section-head">
@@ -349,7 +355,7 @@ export function LayoutTab({
               <p className="kicker">Step 1 · Samples</p>
               <h2>Paste sample table</h2>
               <p className="muted">
-                Paste rows with any number of columns. Map which column is <strong>Animal ID</strong>. Only Animal ID will be shown
+                Paste rows with any number of columns. Map which column is <strong>Sample ID</strong>. Only Sample ID will be shown
                 on wells; other columns stay attached as metadata for analysis/export.
               </p>
             </div>
@@ -382,7 +388,7 @@ export function LayoutTab({
           {table.headers.length > 0 && (
             <div className="controls">
               <label className="control">
-                <span>Animal ID column</span>
+                <span>Sample ID column</span>
                 <select value={animalIdCol} onChange={(e) => onChangeAnimalIdCol(Number(e.target.value))} data-testid="animal-id-col-select">
                   {table.headers.map((h, idx) => (
                     <option key={h + idx} value={idx}>

@@ -1,0 +1,191 @@
+{
+  "url": "http://127.0.0.1:18514/",
+  "checks": [
+    {
+      "label": "Page identity and desktop import screen",
+      "details": ""
+    },
+    {
+      "label": "Review step: Confirm import and mapping",
+      "details": ""
+    },
+    {
+      "label": "Review step: Confirm standards and blanks",
+      "details": ""
+    },
+    {
+      "label": "Review step: Approve reviewed fit",
+      "details": ""
+    },
+    {
+      "label": "Review step: Confirm concentration review",
+      "details": ""
+    },
+    {
+      "label": "Plot uses six expected biological sample values",
+      "details": "[6.000000000814907,6.999999998835847,8.000000002095476,14.000000000698492,16.00000000023283,17.99999999976717]"
+    },
+    {
+      "label": "Default PNG export has the requested 900 × 500 dimensions",
+      "details": ""
+    },
+    {
+      "label": "All five review steps confirmed",
+      "details": ""
+    },
+    {
+      "label": "Actual PNG and SVG graph downloads",
+      "details": "{\"dimensions\":[1100,550],\"svgBytes\":8584,\"svgPoints\":6}"
+    },
+    {
+      "label": "CSV includes expected concentration and withheld values",
+      "details": ""
+    },
+    {
+      "label": "Downloaded Excel workbook opened and agrees with plot",
+      "details": "{\"sheets\":[\"Samples\",\"Wells\",\"Standards\",\"Settings\",\"Original input\"],\"eligible\":[6.000000000814907,6.999999998835847,8.000000002095476,14.000000000698492,16.00000000023283,17.99999999976717],\"withheld\":[{\"id\":\"Sample 7\",\"status\":\"no-eligible-replicates\",\"reason\":\"Absorbance is above the calibrated concentration range.\"},{\"id\":\"Sample 8\",\"status\":\"no-eligible-replicates\",\"reason\":\"Absorbance is below the calibrated concentration range.\"}]}"
+    },
+    {
+      "label": "Print button invoked and Chromium print PDF saved",
+      "details": ""
+    },
+    {
+      "label": "Downloaded experiment package reopened with graph settings and reviewed data",
+      "details": ""
+    },
+    {
+      "label": "Narrow graph view has no page-level horizontal overflow",
+      "details": "{\"viewport\":768,\"document\":768}"
+    },
+    {
+      "label": "Keyboard focus moves from CSV to TSV export",
+      "details": ""
+    },
+    {
+      "label": "Corrected input requires a Net column and disables a second blank subtraction",
+      "details": ""
+    },
+    {
+      "label": "No uncaught page errors, unexpected external requests or HTTP failures",
+      "details": ""
+    }
+  ],
+  "console": [],
+  "pageErrors": [],
+  "externalRequests": [],
+  "httpFailures": [],
+  "files": {
+    "practice-default-graph.png": {
+      "path": "/Users/meghamsh/Documents/Codex/2026-11-13/files-pasted-by-the-user-help-2/work/elisa-phase-2/qa/practice-default-graph.png",
+      "suggestedName": "Sample-concentrations.png",
+      "bytes": 28305
+    },
+    "practice-sample-graph.png": {
+      "path": "/Users/meghamsh/Documents/Codex/2026-11-13/files-pasted-by-the-user-help-2/work/elisa-phase-2/qa/practice-sample-graph.png",
+      "suggestedName": "Sample-concentrations.png",
+      "bytes": 31970
+    },
+    "practice-sample-graph.svg": {
+      "path": "/Users/meghamsh/Documents/Codex/2026-11-13/files-pasted-by-the-user-help-2/work/elisa-phase-2/qa/practice-sample-graph.svg",
+      "suggestedName": "Sample-concentrations.svg",
+      "bytes": 8584
+    },
+    "practice-samples.csv": {
+      "path": "/Users/meghamsh/Documents/Codex/2026-11-13/files-pasted-by-the-user-help-2/work/elisa-phase-2/qa/practice-samples.csv",
+      "suggestedName": "Practice-one-plate-ELISA-samples.csv",
+      "bytes": 1385
+    },
+    "practice-review.xlsx": {
+      "path": "/Users/meghamsh/Documents/Codex/2026-11-13/files-pasted-by-the-user-help-2/work/elisa-phase-2/qa/practice-review.xlsx",
+      "suggestedName": "Practice-one-plate-ELISA-r10.xlsx",
+      "bytes": 19047
+    },
+    "practice-print.pdf": {
+      "path": "/Users/meghamsh/Documents/Codex/2026-11-13/files-pasted-by-the-user-help-2/work/elisa-phase-2/qa/practice-print.pdf",
+      "bytes": 67586
+    },
+    "practice-experiment.easylab.json": {
+      "path": "/Users/meghamsh/Documents/Codex/2026-11-13/files-pasted-by-the-user-help-2/work/elisa-phase-2/qa/practice-experiment.easylab.json",
+      "suggestedName": "Practice-one-plate-ELISA-r10.easylab.json",
+      "bytes": 116863
+    }
+  },
+  "plot": [
+    {
+      "group": "Control",
+      "values": [
+        6.000000000814907,
+        6.999999998835847,
+        8.000000002095476
+      ],
+      "labels": [
+        "Sample 1",
+        "Sample 2",
+        "Sample 3"
+      ]
+    },
+    {
+      "group": "Treatment",
+      "values": [
+        14.000000000698492,
+        16.00000000023283,
+        17.99999999976717
+      ],
+      "labels": [
+        "Sample 4",
+        "Sample 5",
+        "Sample 6"
+      ]
+    }
+  ],
+  "graphExport": {
+    "dimensions": [
+      1100,
+      550
+    ],
+    "svgBytes": 8584,
+    "svgPoints": 6
+  },
+  "workbook": {
+    "sheets": [
+      "Samples",
+      "Wells",
+      "Standards",
+      "Settings",
+      "Original input"
+    ],
+    "eligible": [
+      6.000000000814907,
+      6.999999998835847,
+      8.000000002095476,
+      14.000000000698492,
+      16.00000000023283,
+      17.99999999976717
+    ],
+    "withheld": [
+      {
+        "id": "Sample 7",
+        "status": "no-eligible-replicates",
+        "reason": "Absorbance is above the calibrated concentration range."
+      },
+      {
+        "id": "Sample 8",
+        "status": "no-eligible-replicates",
+        "reason": "Absorbance is below the calibrated concentration range."
+      }
+    ]
+  },
+  "printImage": {
+    "complete": true,
+    "naturalWidth": 900,
+    "naturalHeight": 300,
+    "width": 1440,
+    "height": 302.359375,
+    "srcPrefix": "data:image/svg+xml,%3Csvg%20cl",
+    "display": "block"
+  },
+  "narrow": {
+    "viewport": 768,
+    "document": 768
+  }
+}

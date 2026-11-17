@@ -14,7 +14,17 @@ describe('elisaReader', () => {
 
     // Fill to 8 rows; values aren't important for the test beyond A1.
     const filler = rowB
-    const text = [header, rowA, rowB, rowC, filler, filler, filler, filler, filler].join('\n')
+    const text = [
+      header,
+      rowA,
+      rowB,
+      rowC,
+      filler,
+      filler,
+      filler,
+      filler,
+      filler,
+    ].join('\n')
 
     const parsed = parseElisaReaderText(text)
     expect(Object.keys(parsed.wells).length).toBeGreaterThan(0)
@@ -24,3 +34,102 @@ describe('elisaReader', () => {
   })
 })
 
+it('retains malformed and unmatched rows and rejects duplicate wells', () => {
+  const parsed = parseElisaReaderText(
+    'Well\t450\t570\nA1\t1\t1\nA2\tbad\t0.1\nZ9\t2\t0.1\nA1\t3\t0.1',
+  )
+  expect(parsed.format).toBe('list')
+  expect(parsed.rows).toHaveLength(4)
+  expect(parsed.unmatchedCount).toBe(1)
+  expect(parsed.duplicateCount).toBe(1)
+  expect(parsed.wells.A1?.net).toBeNull()
+  expect(parsed.wells.A2?.original?.['450']).toBe('bad')
+  expect(parsed.wells.A2?.issues?.length).toBeGreaterThan(0)
+})
+it('reads explicitly corrected absorbance without inventing wavelengths', () => {
+  const parsed = parseElisaReaderText('Well,Absorbance\nA1,0.45\nA2,-0.03')
+  expect(parsed.wells.A1?.net).toBe(0.45)
+  expect(parsed.wells.A1?.a450).toBeNull()
+  expect(parsed.wells.A2?.net).toBe(-0.03)
+  expect(parsed.rows).toHaveLength(2)
+})
+it('does not shift later plate rows when a whole row is missing or invalid', () => {
+  const header =
+    'Temperature\t' +
+    Array.from({ length: 12 }, (_, i) => i + 1).join('\t') +
+    '\t' +
+    Array.from({ length: 12 }, (_, i) => i + 1).join('\t')
+  const row = (value: string) =>
+    '\t' +
+    Array(12).fill(value).join('\t') +
+    '\t' +
+    Array(12).fill('0').join('\t')
+  const parsed = parseElisaReaderText(
+    [header, row('1'), row('bad'), ...Array(6).fill(row('3'))].join('\n'),
+  )
+  expect(parsed.wells.A1?.net).toBe(1)
+  expect(parsed.wells.B1?.net).toBeNull()
+  expect(parsed.wells.C1?.net).toBe(3)
+})
+it('accepts quoted CSV numbers and preserves original logical rows', () => {
+  const parsed = parseElisaReaderText(
+    '"Well","450","570"\n"A1","0.8","0.2"\n"A2","bad","0.2"',
+  )
+  expect(parsed.wells.A1?.net).toBeCloseTo(0.6)
+  expect(parsed.wells.A2?.issues).toEqual(['450 is not numeric'])
+  expect(parsed.rows).toHaveLength(2)
+})
+
+it('validates the selected signal and preserves unused raw cells', () => {
+  const text = 'Well,450,570,Net\nA1,bad,0.2,0.45'
+  const raw = parseElisaReaderText(text, 'raw')
+  expect(raw.wells.A1?.issues).toContain('450 is not numeric')
+  for (const mode of ['wavelengthCorrected', 'blankCorrected'] as const) {
+    const corrected = parseElisaReaderText(text, mode)
+    expect(corrected.wells.A1?.net).toBe(0.45)
+    expect(corrected.wells.A1?.issues).toEqual([])
+    expect(corrected.rows[0].values).toContain('bad')
+  }
+  expect(
+    parseElisaReaderText(
+      'Well,450,570\nA1,1,0.2',
+      'blankCorrected',
+    ).warnings.join(' '),
+  ).toContain('explicit Absorbance or Net')
+  expect(
+    parseElisaReaderText('Well,Absorbance\nA1,0.8', 'raw').warnings.join(' '),
+  ).toContain('both 450 and 570')
+})
+
+it('blocks an entire plate row with a missing wavelength separator', () => {
+  const half = Array.from({ length: 12 }, (_, i) => String(i + 1))
+  const header = ['Temperature', ...half, '', ...half].join('\t')
+  const good = [
+    '23',
+    ...Array(12).fill('1'),
+    '',
+    ...half.map((v) => String(Number(v) / 10)),
+  ].join('\t')
+  const bad = [
+    '23',
+    ...Array(12).fill('1'),
+    ...half.map((v) => String(Number(v) / 10)),
+  ].join('\t')
+  const parsed = parseElisaReaderText(
+    [header, bad, ...Array(7).fill(good)].join('\n'),
+  )
+  expect(parsed.warnings.join(' ')).toContain('missing or misplaced cells')
+  for (let i = 1; i <= 12; i++)
+    expect(parsed.wells[`A${i}` as 'A1']?.issues?.[0]).toContain(
+      'missing or misplaced cells',
+    )
+  expect(parsed.wells.B1?.a570).toBe(0.1)
+  expect(parsed.rows[0].values.at(-1)).toBe(bad)
+})
+it('surfaces ragged list-table rows instead of silently accepting padded cells', () => {
+  const parsed = parseElisaReaderText(
+    'Well,450,570,Comment\nA1,1,0.1,note\nA2,2,0.2',
+  )
+  expect(parsed.warnings.join(' ')).toContain('fewer columns')
+  expect(parsed.rows).toHaveLength(2)
+})

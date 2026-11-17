@@ -23,37 +23,72 @@ const detectSeparator = (text: string): TableText['separator'] => {
   return counts[best] > 0 ? (best as TableText['separator']) : 'whitespace'
 }
 
-const splitRow = (line: string, sep: TableText['separator']): string[] => {
-  if (sep === 'tab') return line.split('\t').map((c) => c.trim())
-  if (sep === 'comma') return line.split(',').map((c) => c.trim())
-  if (sep === 'semicolon') return line.split(';').map((c) => c.trim())
-  if (sep === 'pipe') return line.split('|').map((c) => c.trim())
-  return line.trim().split(/\s+/).map((c) => c.trim())
+const parseRows = (text: string, sep: TableText['separator']): string[][] => {
+  if (sep === 'whitespace')
+    return text
+      .split(/\n/)
+      .filter((line) => line.trim())
+      .map((line) => line.trim().split(/\s+/))
+  const delimiter = { tab: '\t', comma: ',', semicolon: ';', pipe: '|' }[sep]
+  const rows: string[][] = []
+  let row: string[] = []
+  let cell = ''
+  let quoted = false
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]
+    if (char === '"') {
+      if (quoted && text[i + 1] === '"') {
+        cell += '"'
+        i++
+      } else if (quoted || !cell.trim()) quoted = !quoted
+      else cell += char
+    } else if (char === delimiter && !quoted) {
+      row.push(cell.trim())
+      cell = ''
+    } else if (char === '\n' && !quoted) {
+      row.push(cell.trim())
+      if (row.some((value) => value)) rows.push(row)
+      row = []
+      cell = ''
+    } else cell += char
+  }
+  row.push(cell.trim())
+  if (row.some((value) => value)) rows.push(row)
+  return rows
 }
 
-export const parseTableText = (text: string, options: ParseOptions): TableText => {
+export const parseTableText = (
+  text: string,
+  options: ParseOptions,
+): TableText => {
   const trimmed = text.replace(/\r/g, '').trim()
   if (!trimmed) {
-    return { headers: [], rows: [], maxColumns: 0, warnings: [], separator: 'whitespace' }
+    return {
+      headers: [],
+      rows: [],
+      maxColumns: 0,
+      warnings: [],
+      separator: 'whitespace',
+    }
   }
 
   const separator = detectSeparator(trimmed)
-  const rawLines = trimmed
-    .split('\n')
-    .map((line) => line.trimEnd())
-    .filter((line) => line.trim().length > 0)
-
-  const rawRows = rawLines.map((line) => splitRow(line, separator))
+  const rawRows = parseRows(trimmed, separator)
   const maxColumns = rawRows.reduce((max, row) => Math.max(max, row.length), 0)
 
   const normalized = rawRows.map((row) => {
     if (row.length === maxColumns) return row
-    return [...row, ...Array.from({ length: maxColumns - row.length }, () => '')]
+    return [
+      ...row,
+      ...Array.from({ length: maxColumns - row.length }, () => ''),
+    ]
   })
 
   const warnings: string[] = []
-  if (normalized.length && normalized.some((r) => r.length !== maxColumns)) {
-    warnings.push('Some rows have fewer columns than others; missing cells were padded with blanks.')
+  if (rawRows.length && rawRows.some((r) => r.length !== maxColumns)) {
+    warnings.push(
+      'Some rows have fewer columns than others; missing cells were padded with blanks.',
+    )
   }
 
   const headers = options.hasHeader
@@ -66,7 +101,7 @@ export const parseTableText = (text: string, options: ParseOptions): TableText =
 
 export const guessColumnIndex = (
   table: Pick<TableText, 'headers' | 'rows'>,
-  kind: 'animalId' | 'group' | 'dilutionFactor'
+  kind: 'animalId' | 'group' | 'dilutionFactor',
 ): number => {
   if (!table.headers.length) return 0
 
@@ -79,7 +114,9 @@ export const guessColumnIndex = (
   }
 
   if (kind === 'dilutionFactor') {
-    const byName = headerMatch(/^(dilution|dilution factor|dilution_factor|dilutionfactor|dil|df)$/i)
+    const byName = headerMatch(
+      /^(dilution|dilution factor|dilution_factor|dilutionfactor|dil|df)$/i,
+    )
     if (byName >= 0) return byName
 
     // Heuristic: prefer columns that look like "10", "2", "1:10", "1/10", "10x", etc.
@@ -90,7 +127,9 @@ export const guessColumnIndex = (
       /^\s*x\s*\d+(\.\d+)?\s*$/i.test(v)
 
     const scores = table.headers.map((_, colIdx) => {
-      const values = table.rows.map((r) => (r[colIdx] ?? '').trim()).filter(Boolean)
+      const values = table.rows
+        .map((r) => (r[colIdx] ?? '').trim())
+        .filter(Boolean)
       if (values.length < 2) return -1
       const hits = values.filter(dilutionLike).length
       const ratio = hits / values.length
@@ -110,7 +149,9 @@ export const guessColumnIndex = (
   const colScores = table.headers.map((_, colIdx) => {
     const values = table.rows.map((r) => r[colIdx] ?? '').filter(Boolean)
     if (!values.length) return -1
-    const numeric = values.filter((v) => /^[+-]?\d+(\.\d+)?$/.test(v.trim())).length
+    const numeric = values.filter((v) =>
+      /^[+-]?\d+(\.\d+)?$/.test(v.trim()),
+    ).length
     const alpha = values.filter((v) => /[A-Za-z]/.test(v)).length
     const avgLen = values.reduce((acc, v) => acc + v.length, 0) / values.length
     // prefer "mostly non-numeric", has letters, and not too short

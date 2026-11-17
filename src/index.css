@@ -1,173 +1,38 @@
 @import '@fontsource/ibm-plex-sans/latin-400.css';
 @import '@fontsource/ibm-plex-sans/latin-500.css';
 @import '@fontsource/ibm-plex-sans/latin-600.css';
-@import '@fontsource/ibm-plex-sans/latin-700.css';
-@import '@fontsource/ibm-plex-mono/latin-400.css';
-@import '@fontsource/ibm-plex-mono/latin-500.css';
-@import '@fontsource/ibm-plex-mono/latin-600.css';
-@import '@fontsource/ibm-plex-mono/latin-700.css';
 :root {
-  --font-sans: 'IBM Plex Sans', 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
-  --font-display: var(--font-sans);
-  --font-body: var(--font-sans);
-  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
-  --tracking-display: 0.08em;
-  --tracking-label: 0.12em;
-
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 32px;
-  --space-7: 48px;
-  --space-8: 64px;
-  --s-1: 4px;
-  --s-2: 8px;
-  --s-3: 12px;
-  --s-4: 16px;
-  --s-5: 24px;
-  --s-6: 32px;
-  --s-7: 48px;
-
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 12px;
-  --scrollbar-gap: 8px;
-
-  --bg: #F6F2EA;
-  --panel: #FFFFFF;
-  --surface: #FFFFFF;
-  --surface-2: #FFF7EC;
-  --surface-3: #F2EADF;
-
-  --text: #111113;
-  --text-subtle: #2F2F36;
-  --text-2: #2F2F36;
-  --text-3: #575762;
-  --muted: #575762;
-
-  --border: #15151A;
-  --border-2: #0F0F14;
-
-  --accent: #1F5BFF;
-  --accent-strong: #1F5BFF;
-  --accent-soft: rgba(31, 91, 255, 0.18);
-  --accent-weak: rgba(31, 91, 255, 0.18);
-  --focus: rgba(31, 91, 255, 0.35);
-
-  --danger: #B42318;
-  --danger-weak: rgba(180, 35, 24, 0.12);
-  --success: #12b76a;
-  --success-soft: rgba(18, 183, 106, 0.16);
-  --success-bg: var(--success-soft);
-  --success-border: rgba(18, 183, 106, 0.4);
-  --warning: #f59e0b;
-  --warning-soft: rgba(245, 158, 11, 0.18);
-  --warning-bg: var(--warning-soft);
-  --warning-border: rgba(245, 158, 11, 0.42);
-
-  --shadow-1: 3px 3px 0 rgba(17, 17, 20, 0.9);
-  --shadow-2: 10px 10px 0 rgba(17, 17, 20, 0.9);
-  --shadow: var(--shadow-2);
-  --shadow-soft: var(--shadow-1);
-
-  font-family: var(--font-body);
-  font-size: 16px;
-  line-height: 1.6;
-  font-weight: 400;
-  letter-spacing: 0;
-  color: var(--text);
-  background-color: var(--bg);
-  color-scheme: light;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  font-family: 'IBM Plex Sans', sans-serif;
+  color: #183b3a;
+  background: #f3f7f7;
+  font-synthesis: none;
+  font-size: 15px;
+  line-height: 1.5;
 }
-
 * {
   box-sizing: border-box;
 }
-
-a {
-  color: inherit;
-}
-
-a:hover {
-  color: inherit;
-}
-
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  min-height: 100vh;
+  min-width: 320px;
 }
-
-::selection {
-  background: var(--accent-weak);
+button,
+input,
+select,
+textarea {
+  font: inherit;
 }
-
 button {
-  font-family: inherit;
+  cursor: pointer;
 }
-
-/* Easylab suite visual refresh: shared local-first lab console palette. */
-:root {
-  --tracking-display: 0;
-  --tracking-label: 0;
-  --radius-sm: 7px;
-  --radius-md: 8px;
-  --radius-lg: 8px;
-  --bg: #F3F6FA;
-  --panel: #FFFFFF;
-  --surface: #FFFFFF;
-  --surface-2: #F7F9FC;
-  --surface-3: #EEF3F8;
-  --text: #07111F;
-  --text-subtle: #334155;
-  --text-2: #334155;
-  --text-3: #64748B;
-  --muted: #64748B;
-  --border: #D6DEE8;
-  --border-2: #B8C4D3;
-  --accent: #3156D4;
-  --accent-strong: #2447B8;
-  --accent-soft: rgba(49, 86, 212, 0.12);
-  --accent-weak: rgba(49, 86, 212, 0.1);
-  --focus: rgba(49, 86, 212, 0.22);
-  --shadow-1: 0 1px 2px rgba(15, 23, 42, 0.08);
-  --shadow-2: 0 14px 34px rgba(15, 23, 42, 0.12);
-  --shadow: var(--shadow-2);
-  --shadow-soft: var(--shadow-1);
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
-/* Final Easylab type and palette normalization for packaged modules. */
-:root {
-  --font-sans: 'IBM Plex Sans', 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
-  --font-display: 'IBM Plex Sans', 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
-  --font-body: 'IBM Plex Sans', 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
-  --tracking-display: 0;
-  --tracking-label: 0;
-  --bg: #f4efe5;
-  --panel: rgba(255, 252, 245, 0.94);
-  --surface: rgba(255, 252, 245, 0.94);
-  --surface-2: rgba(255, 252, 245, 0.82);
-  --surface-3: #efe7d9;
-  --text: #142620;
-  --text-2: #203a32;
-  --text-3: #68736d;
-  --text-subtle: #4f5f58;
-  --muted: #68736d;
-  --border: rgba(32, 48, 42, 0.14);
-  --border-2: rgba(32, 48, 42, 0.22);
-  --accent: #075c49;
-  --accent-strong: #053f32;
-  --accent-soft: rgba(7, 92, 73, 0.12);
-  --accent-weak: rgba(7, 92, 73, 0.1);
-  --accent-border: rgba(7, 92, 73, 0.32);
-  --focus: rgba(7, 92, 73, 0.18);
-  --radius-sm: 8px;
-  --radius-md: 8px;
-  --shadow-soft: 0 1px 2px rgba(20, 38, 32, 0.04), 0 14px 34px rgba(20, 38, 32, 0.06);
+:focus-visible {
+  outline: 3px solid #cc7b25;
+  outline-offset: 3px;
+}
+a {
+  color: #087f8c;
 }

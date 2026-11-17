@@ -11,6 +11,8 @@ export type WellAssignment = {
   animalId?: string
   group?: string
   dilutionFactor?: number
+  dilutionText?: string
+  exclusionReason?: string
   meta?: Record<string, string>
 
   // Standard-only fields

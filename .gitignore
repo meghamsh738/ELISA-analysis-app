@@ -19,6 +19,8 @@ test-results
 
 # Local caches
 .npm-cache
+runtime/
+.next-runtime/
 
 # Desktop packaging
 release

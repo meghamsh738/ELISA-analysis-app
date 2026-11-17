@@ -5,168 +5,248 @@ export type ElisaWellReading = {
   a450: number | null
   a570: number | null
   net: number | null
+  issues?: string[]
+  original?: Record<string, string>
 }
-
+export type ReaderRow = {
+  row: number
+  wellId: string
+  values: string[]
+  issues: string[]
+}
 export type ElisaParseResult = {
   wells: Partial<Record<WellId96, ElisaWellReading>>
   temperatureC: number | null
   warnings: string[]
   format: 'plateBlocks' | 'list'
+  rows: ReaderRow[]
+  headers: string[]
+  unmatchedCount: number
+  duplicateCount: number
 }
-
-const toNumber = (value: string): number | null => {
-  const s = value.trim()
-  if (!s) return null
-  const up = s.toUpperCase()
-  if (['NA', 'NAN', 'INF', '#DIV/0!', 'UNDETERMINED'].includes(up)) return null
-  const n = Number(s)
-  return Number.isFinite(n) ? n : null
+const numeric = (raw: string): number | null =>
+  raw.trim() && Number.isFinite(Number(raw)) ? Number(raw) : null
+const split = (line: string) =>
+  line.includes('\t')
+    ? line.split('\t')
+    : line.includes(',')
+      ? line.split(',')
+      : line.includes(';')
+        ? line.split(';')
+        : line.trim().split(/\s+/)
+const wellId = (raw: string): WellId96 | null => {
+  const match = /^([A-H])\s*0?([1-9]|1[0-2])$/i.exec(raw.trim())
+  return match
+    ? (`${match[1].toUpperCase()}${Number(match[2])}` as WellId96)
+    : null
 }
+const fieldIssue = (label: string, value: string) =>
+  numeric(value) === null
+    ? `${label} ${value.trim() ? 'is not numeric' : 'is missing'}`
+    : ''
 
-const splitPreserve = (line: string, sep: 'tab' | 'comma' | 'semicolon' | 'pipe' | 'whitespace'): string[] => {
-  if (sep === 'tab') return line.split('\t').map((c) => c.trim())
-  if (sep === 'comma') return line.split(',').map((c) => c.trim())
-  if (sep === 'semicolon') return line.split(';').map((c) => c.trim())
-  if (sep === 'pipe') return line.split('|').map((c) => c.trim())
-  return line.trim().split(/\s+/).map((c) => c.trim())
-}
-
-const detectSep = (text: string): 'tab' | 'comma' | 'semicolon' | 'pipe' | 'whitespace' => {
-  const head = text.split(/\r?\n/).slice(0, 5).join('\n')
-  const counts = {
-    tab: (head.match(/\t/g) ?? []).length,
-    comma: (head.match(/,/g) ?? []).length,
-    semicolon: (head.match(/;/g) ?? []).length,
-    pipe: (head.match(/\|/g) ?? []).length,
+export const parseElisaReaderText = (
+  text: string,
+  inputMode?: 'raw' | 'wavelengthCorrected' | 'blankCorrected',
+): ElisaParseResult => {
+  const result: ElisaParseResult = {
+    wells: {},
+    temperatureC: null,
+    warnings: [],
+    format: 'list',
+    rows: [],
+    headers: [],
+    unmatchedCount: 0,
+    duplicateCount: 0,
   }
-  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1])
-  const best = sorted[0]?.[0] as keyof typeof counts | undefined
-  if (!best) return 'whitespace'
-  return counts[best] > 0 ? best : 'whitespace'
-}
-
-const tryParsePlateBlocks = (text: string): ElisaParseResult | null => {
-  const trimmed = text.replace(/\r/g, '').trim()
-  if (!trimmed) return null
-
-  const sep = detectSep(trimmed)
-  const lines = trimmed
-    .split('\n')
-    .map((l) => l.trimEnd())
-    .filter((l) => l.trim().length > 0)
-
-  const rows = lines.map((l) => splitPreserve(l, sep))
-  const headerIdx = rows.findIndex((r) => r.some((c) => /temperature/i.test(c)))
-  const resolvedHeaderIdx = headerIdx >= 0 ? headerIdx : rows.findIndex((r) => r.filter((c) => c.trim() === '1').length >= 2)
-  if (resolvedHeaderIdx < 0) return null
-
-  const header = rows[resolvedHeaderIdx]
-  const oneIndices: number[] = []
-  header.forEach((cell, idx) => {
-    if (cell.trim() === '1') oneIndices.push(idx)
+  if (!text.trim()) return result
+  const lines = text.replace(/\r/g, '').split('\n')
+  while (lines.at(-1) === '') lines.pop()
+  // The existing reader format contains two adjacent 12-column wavelength blocks.
+  const blockHeader = lines.findIndex((line) => {
+    const cells = split(line)
+    return (
+      cells.filter(
+        (cell, i) =>
+          cell.trim() === '1' &&
+          Array.from({ length: 12 }, (_, j) => String(j + 1)).every(
+            (value, j) => cells[i + j]?.trim() === value,
+          ),
+      ).length >= 2
+    )
   })
-  if (oneIndices.length < 2) return null
-  const start450 = oneIndices[0]
-  const start570 = oneIndices[1]
-
-  const dataRows = rows.slice(resolvedHeaderIdx + 1)
-  const matrix450: (number | null)[][] = []
-  const matrix570: (number | null)[][] = []
-  let temperatureC: number | null = null
-
-  for (const row of dataRows) {
-    const padded = row.length < start570 + 12 ? [...row, ...Array.from({ length: start570 + 12 - row.length }, () => '')] : row
-    const vals450 = Array.from({ length: 12 }, (_, i) => toNumber(padded[start450 + i] ?? ''))
-    const vals570 = Array.from({ length: 12 }, (_, i) => toNumber(padded[start570 + i] ?? ''))
-    const hasAny = vals450.some((v) => v !== null) || vals570.some((v) => v !== null)
-    if (!hasAny) continue
-
-    if (temperatureC === null) {
-      // Temperature is usually in the first cell of the first row
-      temperatureC = toNumber(padded[0] ?? '') ?? null
-    }
-
-    matrix450.push(vals450)
-    matrix570.push(vals570)
-    if (matrix450.length >= 8) break
-  }
-
-  if (matrix450.length < 8 || matrix570.length < 8) return null
-
-  const wells: Partial<Record<WellId96, ElisaWellReading>> = {}
-  for (let r = 0; r < 8; r += 1) {
-    for (let c = 0; c < 12; c += 1) {
-      const well = indexToWellId96(r * 12 + c)
-      if (!well) continue
-      const a450 = matrix450[r]?.[c] ?? null
-      const a570 = matrix570[r]?.[c] ?? null
-      const net = a450 !== null && a570 !== null ? a450 - a570 : null
-      wells[well] = { a450, a570, net }
-    }
-  }
-
-  return { wells, temperatureC, warnings: [], format: 'plateBlocks' }
-}
-
-const tryParseList = (text: string): ElisaParseResult | null => {
-  const trimmed = text.replace(/\r/g, '').trim()
-  if (!trimmed) return null
-
-  const table = parseTableText(trimmed, { hasHeader: true })
-  if (table.headers.length < 2) return null
-
-  const h = table.headers.map((v) => v.trim().toLowerCase())
-  const idx450 = h.findIndex((c) => c === '450' || c.includes('450'))
-  const idx570 = h.findIndex((c) => c === '570' || c.includes('570'))
-  if (idx450 < 0 || idx570 < 0) return null
-
-  const idxWell = h.findIndex((c) => c === 'well' || c.includes('well') || c.includes('position'))
-  const idxIndex = idxWell < 0 ? 0 : -1
-
-  const wells: Partial<Record<WellId96, ElisaWellReading>> = {}
-  const warnings: string[] = []
-
-  for (const row of table.rows) {
-    const a450 = toNumber(row[idx450] ?? '')
-    const a570 = toNumber(row[idx570] ?? '')
-    const net = a450 !== null && a570 !== null ? a450 - a570 : null
-
-    let wellId: WellId96 | null = null
-
-    if (idxWell >= 0) {
-      const raw = (row[idxWell] ?? '').trim()
-      const match = /^([A-H])\s*([1-9]|1[0-2])$/i.exec(raw)
-      if (match) {
-        wellId = `${match[1].toUpperCase()}${Number(match[2])}` as WellId96
+  if (blockHeader >= 0) {
+    result.format = 'plateBlocks'
+    if (inputMode && inputMode !== 'raw')
+      result.warnings.push(
+        'Wavelength blocks contain raw readings. Select raw input, or provide a Well/Absorbance table of corrected values.',
+      )
+    const headers = split(lines[blockHeader])
+    const starts = headers.flatMap((cell, i) =>
+      cell.trim() === '1' ? [i] : [],
+    )
+    result.headers = ['Well', '450', '570', 'Original plate row']
+    const rows = lines.slice(blockHeader + 1)
+    if (rows.length !== 8)
+      result.warnings.push(
+        `Expected 8 plate rows; found ${rows.length}. Correct the input before confirming.`,
+      )
+    rows.forEach((line, rowIndex) => {
+      const cells = split(line)
+      if (rowIndex >= 8) {
+        result.rows.push({
+          row: blockHeader + rowIndex + 2,
+          wellId: '',
+          values: cells,
+          issues: ['Unmatched extra plate row'],
+        })
+        result.unmatchedCount++
+        return
       }
-    } else {
-      // Fall back to sequential index (1..96).
-      const n = Number((row[idxIndex] ?? '').trim())
-      if (Number.isFinite(n) && n >= 1 && n <= 96) {
-        wellId = indexToWellId96(n - 1)
+      const separatorColumns = headers.flatMap((value, index) =>
+        index > starts[0] && !value.trim() ? [index] : [],
+      )
+      const shapeIssue =
+        cells.length !== headers.length ||
+        separatorColumns.some((index) => cells[index]?.trim())
+          ? `Plate row ${rowIndex + 1} has missing or misplaced cells; check every separator against the header.`
+          : ''
+      if (shapeIssue) result.warnings.push(shapeIssue)
+      if (!rowIndex) result.temperatureC = numeric(cells[0] ?? '')
+      for (let col = 0; col < 12; col++) {
+        const id = indexToWellId96(rowIndex * 12 + col)!
+        const raw450 = cells[starts[0] + col] ?? ''
+        const raw570 = cells[starts[1] + col] ?? ''
+        const a450 = numeric(raw450)
+        const a570 = numeric(raw570)
+        const issues = [
+          shapeIssue,
+          fieldIssue('450', raw450),
+          fieldIssue('570', raw570),
+        ].filter(Boolean)
+        result.wells[id] = {
+          a450,
+          a570,
+          net: a450 !== null && a570 !== null ? a450 - a570 : null,
+          issues,
+          original: { '450': raw450, '570': raw570, plateRow: line },
+        }
+        result.rows.push({
+          row: blockHeader + rowIndex + 2,
+          wellId: id,
+          values: [id, raw450, raw570, line],
+          issues,
+        })
       }
+    })
+    return result
+  }
+  const table = parseTableText(text, { hasHeader: true })
+  result.warnings.push(...table.warnings)
+  result.headers = table.headers
+  const normalized = table.headers.map((h) =>
+    h.trim().toLowerCase().replace(/[ _-]/g, ''),
+  )
+  const wi = normalized.findIndex((h) =>
+    ['well', 'wellid', 'position', 'wellposition'].includes(h),
+  )
+  const ai = normalized.findIndex((h) => /450/.test(h))
+  const bi = normalized.findIndex((h) => /570/.test(h))
+  const ni = normalized.findIndex((h) =>
+    [
+      'absorbance',
+      'net',
+      'value',
+      'corrected',
+      'correctedabsorbance',
+      'netabsorbance',
+    ].includes(h),
+  )
+  if ((ai < 0 || bi < 0) && ni < 0)
+    result.warnings.push(
+      'Use Well, 450 and 570 columns, or Well and Absorbance for already corrected input.',
+    )
+  if (inputMode === 'raw' && (ai < 0 || bi < 0))
+    result.warnings.push(
+      'Raw input requires both 450 and 570 columns. Select the appropriate corrected-input type for an Absorbance table.',
+    )
+  if (inputMode && inputMode !== 'raw' && ni < 0)
+    result.warnings.push(
+      'Corrected input requires an explicit Absorbance or Net column. Raw wavelengths cannot be declared corrected.',
+    )
+  if (new Set(normalized).size !== normalized.length)
+    result.warnings.push('Duplicate column headings need correction.')
+  for (const [i, values] of table.rows.entries()) {
+    const index = Number(values[0])
+    const id =
+      wi >= 0
+        ? wellId(values[wi] ?? '')
+        : Number.isInteger(index) && index >= 1 && index <= 96
+          ? indexToWellId96(index - 1)
+          : null
+    const raw450 = values[ai] ?? ''
+    const raw570 = values[bi] ?? ''
+    const rawNet = values[ni] ?? ''
+    const a450 = numeric(raw450)
+    const a570 = numeric(raw570)
+    const issues: string[] = []
+    if (!id) {
+      issues.push('Well must be A1–H12, or a whole-number index from 1 to 96')
+      result.unmatchedCount++
     }
-
-    if (!wellId) continue
-    wells[wellId] = { a450, a570, net }
+    if (inputMode === 'raw' || (!inputMode && ai >= 0 && bi >= 0))
+      issues.push(
+        ...[fieldIssue('450', raw450), fieldIssue('570', raw570)].filter(
+          Boolean,
+        ),
+      )
+    else if (ni >= 0)
+      issues.push(...[fieldIssue('Absorbance', rawNet)].filter(Boolean))
+    const net =
+      ni >= 0
+        ? numeric(rawNet)
+        : a450 !== null && a570 !== null
+          ? a450 - a570
+          : null
+    if (id) {
+      if (result.wells[id]) {
+        issues.push('Duplicate well identity')
+        result.duplicateCount++
+        result.wells[id] = {
+          ...result.wells[id]!,
+          issues: ['Duplicate well identity'],
+          a450: null,
+          a570: null,
+          net: null,
+        }
+        for (const row of result.rows.filter((row) => row.wellId === id))
+          row.issues.push('Duplicate well identity')
+      } else
+        result.wells[id] = {
+          a450,
+          a570,
+          net,
+          issues: [...issues],
+          original: Object.fromEntries(
+            table.headers.map((h, j) => [h, values[j] ?? '']),
+          ),
+        }
+    }
+    result.rows.push({
+      row: i + 2,
+      wellId: id ?? values[wi] ?? values[0] ?? '',
+      values,
+      issues,
+    })
   }
-
-  if (!Object.keys(wells).length) {
-    warnings.push('No well readings could be mapped from the list format.')
-  }
-
-  return { wells, temperatureC: null, warnings, format: 'list' }
-}
-
-export const parseElisaReaderText = (text: string): ElisaParseResult => {
-  const warnings: string[] = []
-
-  const block = tryParsePlateBlocks(text)
-  if (block) return block
-
-  const list = tryParseList(text)
-  if (list) return list
-
-  warnings.push('Could not parse the reader output. Try pasting the 450/570 plate blocks as tab-separated text.')
-  return { wells: {}, temperatureC: null, warnings, format: 'plateBlocks' }
+  if (!table.rows.length) result.warnings.push('No reader rows found.')
+  if (result.unmatchedCount)
+    result.warnings.push(
+      `${result.unmatchedCount} unmatched row(s) require correction.`,
+    )
+  if (result.duplicateCount)
+    result.warnings.push(
+      `${result.duplicateCount} duplicate well row(s) require correction.`,
+    )
+  return result
 }

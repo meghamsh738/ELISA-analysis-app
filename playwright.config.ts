@@ -1,25 +1,19 @@
 import { defineConfig, devices } from '@playwright/test'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-// Keep Playwright browser downloads inside the repo by default so:
-// - WSL doesn't try to write to an unwritable global cache path
-// - setup is predictable across machines/CI.
-// Allow override from environment for shared browser caches.
-if (!process.env.PLAYWRIGHT_BROWSERS_PATH) {
-  process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(__dirname, '.playwright-browsers')
-}
+// Use the shared Next-only browser cache and reject a path redirected through a symlink.
+const require = createRequire(import.meta.url)
+const { assertNoSymlinkDirectoryComponents, resolvePlaywrightBrowserRoot } = require('./electron/next-runtime.cjs')
+process.env.PLAYWRIGHT_BROWSERS_PATH = assertNoSymlinkDirectoryComponents(
+  resolvePlaywrightBrowserRoot(__dirname),
+)
 
-const isWindows = process.platform === 'win32'
-const port = 5181
-const url = `http://localhost:${port}`
-const webServerCommandBase = `npm run dev:e2e -- --port ${port}`
-const webServerCommand = isWindows
-  ? webServerCommandBase
-  : `bash -lc 'set -e; PATH=/usr/bin:/bin:$PATH ${webServerCommandBase}'`
+const url = 'http://127.0.0.1:18514'
 
 export default defineConfig({
   testDir: './tests',
@@ -38,7 +32,7 @@ export default defineConfig({
     video: 'retain-on-failure',
   },
   webServer: {
-    command: webServerCommand,
+    command: 'npm run dev:e2e',
     url,
     reuseExistingServer: false,
     timeout: 120_000,

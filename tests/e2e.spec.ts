@@ -1,132 +1,223 @@
 import { test, expect, type Page } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
 
-const SAMPLE_TABLE = `Animal ID\tGroup\tDilution
-S001\tSaline\t1
-S002\tSaline\t1
-S003\tLPS\t1
-S004\tLPS\t1
-S005\tSaline\t1
-S006\tLPS\t1
-S007\tSaline\t1
-S008\tLPS\t1
-S009\tSaline\t2
-S010\tLPS\t2
-S011\tSaline\t2
-S012\tLPS\t2
-S013\tSaline\t4
-S014\tLPS\t4
-S015\tSaline\t4
-S016\tLPS\t4
-S017\tSaline\t1
-S018\tLPS\t1
-S019\tSaline\t1
-S020\tLPS\t1
-S021\tSaline\t2
-S022\tLPS\t2
-S023\tSaline\t4
-S024\tLPS\t4`
-
-const READER_EXAMPLE = `Well\t450\t570
-A1\t2.05\t0.05
-A2\t2.03\t0.05
-B1\t1.77\t0.05
-B2\t1.75\t0.05
-C1\t1.50\t0.05
-C2\t1.48\t0.05
-D1\t1.20\t0.05
-D2\t1.18\t0.05
-E1\t0.90\t0.05
-E2\t1.40\t0.05
-F1\t0.65\t0.05
-F2\t0.63\t0.05
-G1\t0.43\t0.05
-G2\t0.41\t0.05
-H1\t0.29\t0.05
-H2\t0.28\t0.05
-A3\t0.10\t0.05
-B3\t0.10\t0.05
-C3\t0.97\t0.05
-D3\t0.82\t0.05
-E3\t0.71\t0.05
-F3\t0.54\t0.05
-G3\t0.46\t0.05
-H3\t0.36\t0.05`
-
-const openApp = async (page: Page) => {
+const practice = async (page: Page) => {
   await page.goto('/')
-  await page.addStyleTag({ content: '* { transition: none !important; animation: none !important; }' })
+  await expect(page).toHaveTitle('ELISA Analysis Next (Dev)')
+  await page.getByRole('button', { name: 'Open practice experiment' }).click()
+  await expect(page.getByText('28 reader rows', { exact: true })).toBeVisible()
+}
+const review = async (page: Page) => {
+  await page.getByRole('button', { name: 'Confirm import and mapping' }).click()
+  await page
+    .getByRole('button', { name: 'Confirm standards and blanks' })
+    .click()
+  await page.getByRole('button', { name: 'Approve reviewed fit' }).click()
+  await page
+    .getByRole('button', { name: 'Confirm concentration review' })
+    .click()
+  await expect(
+    page.getByText('6 biological samples contribute', { exact: false }),
+  ).toBeVisible()
+  await expect(page.locator('.js-plotly-plot')).toBeVisible()
 }
 
-test('ELISA app renders layout + analysis tabs', async ({ page }) => {
-  await openApp(page)
-
-  await expect(page.getByTestId('app-hero')).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'ELISA plate layout + analysis' })).toBeVisible()
-
-  const layoutTab = page.getByRole('button', { name: 'Layout', exact: true })
-  const analysisTab = page.getByRole('button', { name: 'Analysis', exact: true })
-  await expect(layoutTab).toBeVisible()
-  await expect(analysisTab).toBeVisible()
-
-  await expect(page.getByTestId('layout-tab')).toBeVisible()
-  await analysisTab.click()
-  await expect(page.getByTestId('analysis-tab')).toBeVisible()
-  await expect(page.getByLabel('Curve model')).toHaveValue('poly')
-  await expect(page.getByLabel('Dilution factor')).toHaveValue('10')
-
-  // Smoke screenshot for visual regression.
-  await expect(page).toHaveScreenshot('app_overview.png', { fullPage: true })
+test('reviewed concentrations, graph points, exports and package reopen agree', async ({
+  page,
+}) => {
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  await practice(page)
+  await review(page)
+  expect(
+    await page.locator('.scatterlayer .trace:first-child .point').count(),
+  ).toBe(3)
+  await page.getByLabel('Title', { exact: true }).fill('Saved ELISA figure')
+  await page.getByLabel('Colour Treatment').fill('#aa5533')
+  const csvPromise = page.waitForEvent('download')
+  await page
+    .getByRole('button', { name: 'Download sample CSV', exact: true })
+    .click()
+  const csvDownload = await csvPromise
+  const csv = await readFile((await csvDownload.path())!, 'utf8')
+  expect(csv).toContain('Sample 1,Control,6')
+  expect(csv).toContain('Sample 7,Range checks,,')
+  expect(csv).toContain('Sample 8,Range checks,,')
+  const packagePromise = page.waitForEvent('download')
+  await page
+    .getByRole('button', { name: 'Download experiment package' })
+    .click()
+  const pkg = await packagePromise
+  const pkgPath = (await pkg.path())!
+  const saved = JSON.parse(await readFile(pkgPath, 'utf8'))
+  expect(saved.payload.experiment.graph.title).toBe('Saved ELISA figure')
+  expect(
+    saved.payload.results.samples.filter(
+      (s: { eligible: boolean }) => s.eligible,
+    ),
+  ).toHaveLength(6)
+  await page
+    .getByRole('button', { name: 'New experiment', exact: true })
+    .click()
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  await page
+    .getByLabel('Open experiment', { exact: true })
+    .setInputFiles(pkgPath)
+  await page.getByRole('button', { name: /Graphs & export/ }).click()
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue(
+    'Saved ELISA figure',
+  )
+  await expect(page.getByLabel('Colour Treatment')).toHaveValue('#aa5533')
+  await expect(
+    page.getByRole('button', { name: 'Download sample CSV' }),
+  ).toBeEnabled()
+  expect(errors).toEqual([])
 })
 
-test('ELISA example workflow runs end-to-end with auto-QC apply/reset', async ({ page }) => {
-  await openApp(page)
-
-  const samplesCard = page.getByTestId('samples-card')
-  await page.getByLabel('First row is headers').check({ force: true })
-  await samplesCard.locator('textarea').fill(SAMPLE_TABLE)
-  await page.getByTestId('fill-samples').click()
-
-  // Assign standards in duplicate pairs (A1..H2 => Std1..Std8).
-  await page.getByTestId('well-A1').click()
-  await page.getByTestId('well-H2').click({ modifiers: ['Shift'] })
-  await page.getByRole('button', { name: 'Assign Standards' }).click()
-  await expect(page.getByTestId('well-A1')).toContainText('Std1')
-  await expect(page.getByTestId('well-H2')).toContainText('Std8')
-
-  // Mark A3/B3 as blanks.
-  await page.getByTestId('well-A3').click()
-  await page.getByTestId('well-B3').click({ modifiers: ['Shift'] })
-  await page.getByRole('button', { name: 'Mark Blank' }).click()
-  await expect(page.getByTestId('well-A3')).toContainText('Blank')
-  await expect(page.getByTestId('well-B3')).toContainText('Blank')
-
-  await expect(page).toHaveScreenshot('elisa-layout-with-standards.png', { fullPage: true })
-
-  await page.getByRole('button', { name: 'Analysis', exact: true }).click()
-  const readerCard = page.getByTestId('reader-card')
-  await readerCard.locator('textarea').fill(READER_EXAMPLE)
-
-  const curveCard = page.getByTestId('curve-card')
-  await expect(curveCard).toContainText('R²:')
-  await expect(page).toHaveScreenshot('elisa-analysis-before-autoqc.png', { fullPage: true })
-
-  const applyButton = page.getByTestId('std-autoqc-apply')
-  await expect(applyButton).toBeEnabled()
-  await applyButton.click()
-
-  await expect(page.getByTestId('std-autoqc-toggle')).toBeChecked()
-  await expect(page.getByTestId('std-autoqc')).toContainText('Suggested exclusions applied to fit')
-  await expect(page).toHaveScreenshot('elisa-analysis-after-autoqc.png', { fullPage: true })
-
-  await page.getByTestId('std-autoqc-reset').click()
-  await expect(page.getByTestId('std-autoqc-toggle')).not.toBeChecked()
-  await expect(page.getByTestId('quant-card')).toContainText('S019')
+test('malformed dilution and original reader rows stay visible until corrected', async ({
+  page,
+}) => {
+  await practice(page)
+  await page.getByLabel('Dilution A3', { exact: true }).fill('1:foo')
+  await expect(
+    page.getByRole('button', { name: 'Confirm import and mapping' }),
+  ).toBeDisabled()
+  await expect(page.getByLabel('Dilution A3', { exact: true })).toHaveValue(
+    '1:foo',
+  )
+  await page.getByLabel('Dilution A3', { exact: true }).fill('2')
+  const text = await page.getByLabel('Reader output').inputValue()
+  await page
+    .getByLabel('Reader output')
+    .fill(`${text}\nA3\tbad\t0.05\nZ99\t1\t0.05`)
+  await page
+    .getByText('Preview all original reader rows', { exact: true })
+    .click()
+  await expect(page.getByText('30 reader rows', { exact: true })).toBeVisible()
+  await expect(page.getByText('1 unmatched', { exact: true })).toBeVisible()
+  await expect(page.getByText('1 duplicates', { exact: true })).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Confirm import and mapping' }),
+  ).toBeDisabled()
 })
 
-test('ELISA analysis shows a warning for invalid reader input', async ({ page }) => {
-  await openApp(page)
+test('blank toggle and well review exports use the same offset; upstream edits invalidate review', async ({
+  page,
+}) => {
+  await practice(page)
+  await page.getByRole('button', { name: 'Confirm import and mapping' }).click()
+  await page.getByLabel('Subtract blank', { exact: true }).uncheck()
+  await expect(page.getByText(/Offset: 0 absorbance/)).toBeVisible()
+  await page
+    .getByRole('button', { name: 'Confirm standards and blanks' })
+    .click()
+  await page.getByRole('button', { name: 'Approve reviewed fit' }).click()
+  await page
+    .getByRole('button', { name: 'Confirm concentration review' })
+    .click()
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Download well review TSV' }).click()
+  const content = await readFile(
+    (await (await downloadPromise).path())!,
+    'utf8',
+  )
+  const rows = content
+    .trim()
+    .split(/\r?\n/)
+    .map((line) => line.split('\t'))
+  const headers = rows[0]
+  const row = rows.find((r) => r[headers.indexOf('Well')] === 'A3')!
+  expect(Number(row[headers.indexOf('BlankOffset')])).toBe(0)
+  expect(Number(row[headers.indexOf('InputAbsorbance')])).toBeCloseTo(
+    Number(row[headers.indexOf('CorrectedAbsorbance')]),
+  )
+  await page.getByRole('button', { name: /Standards & blanks/ }).click()
+  await page.getByLabel('Concentration Std1', { exact: true }).fill('1.2')
+  await page.getByRole('button', { name: /Graphs & export/ }).click()
+  await expect(
+    page.getByRole('button', { name: 'Download sample CSV' }),
+  ).toBeDisabled()
+  await page.getByRole('button', { name: 'Undo', exact: true }).click()
+  await expect(
+    page.getByRole('button', { name: 'Download sample CSV' }),
+  ).toBeEnabled()
+})
 
-  await page.getByRole('button', { name: 'Analysis', exact: true }).click()
-  await page.getByTestId('reader-card').locator('textarea').fill('not a valid reader export')
-  await expect(page.getByRole('alert')).toContainText('Could not parse the reader output')
+test('already blank-corrected input cannot receive a second blank subtraction', async ({
+  page,
+}) => {
+  await practice(page)
+  const raw = await page.getByLabel('Reader output').inputValue()
+  const corrected = raw
+    .split('\n')
+    .slice(1)
+    .map((line) => {
+      const [well, a, b] = line.split('\t')
+      return `${well}\tbad\t${b}\t${Number(a) - Number(b) - 0.1}`
+    })
+  await page
+    .getByLabel('Reader output')
+    .fill(['Well\t450\t570\tNet', ...corrected].join('\n'))
+  await page.getByLabel('Input correction state').selectOption('blankCorrected')
+  await expect(
+    page.getByRole('button', { name: 'Confirm import and mapping' }),
+  ).toBeEnabled()
+  await page.getByRole('button', { name: /Standards & blanks/ }).click()
+  await expect(
+    page.getByLabel('Subtract blank', { exact: true }),
+  ).not.toBeChecked()
+  await expect(
+    page.getByLabel('Subtract blank', { exact: true }),
+  ).toBeDisabled()
+})
+
+test('narrow viewport keeps controls, keyboard focus and the figure within the window', async ({
+  page,
+}) => {
+  await practice(page)
+  await review(page)
+  await page.getByLabel('Export width (px)', { exact: true }).fill('1100')
+  await page.getByLabel('Export height (px)', { exact: true }).fill('550')
+  await expect(
+    page.getByRole('button', { name: 'Print / save PDF report' }),
+  ).toBeEnabled()
+  await page.emulateMedia({ media: 'print' })
+  await expect(page.locator('.print-figure')).toBeVisible()
+  await page.emulateMedia({ media: 'screen' })
+  await page.setViewportSize({ width: 768, height: 900 })
+  await expect
+    .poll(() =>
+      page
+        .locator('.plot')
+        .evaluate((element) =>
+          Math.abs(
+            element.clientWidth -
+              element.querySelector('svg')!.getBoundingClientRect().width,
+          ),
+        ),
+    )
+    .toBeLessThan(2)
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true)
+  await page.getByRole('button', { name: 'Download sample CSV' }).focus()
+  await page.keyboard.press('Tab')
+  await expect(
+    page.getByRole('button', { name: 'Download sample TSV' }),
+  ).toBeFocused()
+  await page
+    .getByRole('button', { name: 'New experiment', exact: true })
+    .click()
+  await expect(page.getByRole('alertdialog')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Keep working' })).toBeFocused()
+  await page.keyboard.press('Shift+Tab')
+  await expect(
+    page.getByRole('button', { name: 'Continue', exact: true }),
+  ).toBeFocused()
+  await page.keyboard.press('Tab')
+  await expect(page.getByRole('button', { name: 'Keep working' })).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('alertdialog')).toHaveCount(0)
 })

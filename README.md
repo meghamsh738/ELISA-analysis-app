@@ -1,77 +1,44 @@
-# ELISA Analysis App
+# EasyLab Next — ELISA Analysis
 
-Standalone app for ELISA 96-well plate layout + analysis (net absorbance, standard curves, quantification).
+A local, guided workflow for one 96-well plate. This development version lives on `codex/easylab-next-20261113`; the original app and installed EasyLab Suite remain separate.
 
-![ELISA Analysis App overview](docs/screenshots/overview.png)
+## Workflow
 
-## What It Does
+1. **Import & map:** preview reader rows and confirm sample IDs, groups, standard levels, blanks and dilution factors. Raw 450/570 blocks and well tables are supported; corrected input requires an explicit Absorbance/Net column. Invalid and unmatched rows remain visible.
+2. **Standards & blanks:** choose custom or labelled legacy settings, set units and concentrations, and review the selected blank wells and mean/median offset. Already blank-corrected input cannot be subtracted again.
+3. **Review fit:** inspect retained/excluded wells, replicate spread, polynomial or 4PL fits, residuals and back-calculated standards. Exclusions require reasons. Automated checks never remove observations.
+4. **Concentrations:** review biological samples and individual wells. Out-of-range, invalid and excluded wells have no final endpoint. Dilution is applied once. Partial replicate results and conflicting sample groups are explicit.
+5. **Graphs & export:** biological-sample dots and group means, optional SD/SEM, editable appearance, CSV/TSV/XLSX, PNG/SVG and printable PDF reports. Final tables and figures require the preceding reviews.
 
-- Build a 96-well plate layout from a pasted sample table (TSV/CSV).
-- Only **Animal ID** is rendered inside the wells (other columns are preserved as metadata).
-- Select wells (including Shift-click range selection) and assign:
-  - `Standard` levels (ex: `Std1`, `Std2`, ...)
-  - `Blank`
-  - sample metadata like dilution factor / group override
-- Paste ELISA reader exports with **450 nm** and **570 nm** blocks.
-- Compute **net absorbance**: `A450 - A570` (optional blank subtraction).
-- Fit polynomial standard curves (degree 2/3), with:
-  - per-replicate keep/remove
-  - outlier flagging to help decide removals
-- Quantify unknowns and export tables as TSV.
+Every upstream edit invalidates dependent approvals. Undo and confirmed resets are available. Local autosave, named assay presets/layouts and versioned `.easylab.json` packages retain source copies, decisions, results and graph settings. New experiments retain the chosen recipe/display settings but require fresh mapping and scientific review.
 
-## Quick Start (Web)
+The **custom assay** is an unvalidated starting template. The **legacy preset** preserves the former concentration series and curve/correction choices; it is not a validated kit protocol. Only monotonic reviewed polynomial ranges can be inverted. A 4PL curve needs sufficient positive standards; no universal curve choice or kit validation is claimed.
 
-Requirements: Node 20+.
+## Try the separate development version
 
-```bash
-npm ci
+Verified with Node **24.22.1**, npm **11.13.0**. Dependencies are installed in this Next worktree; Plotly **3.1.0** and ExcelJS **4.4.0** are pinned. Existing framework versions are retained.
+
+```sh
+cd '/Volumes/Coding Projects/Active/easylab-next/modules/elisa-analysis'
 npm run dev
 ```
 
-Then open `http://localhost:5180`.
+Open `http://127.0.0.1:18514` and choose **Open practice experiment**. The fictional plate contains six valid biological samples and two deliberately out-of-range samples. Development, preview and browser tests use the same strict loopback port and refuse an occupied listener.
 
-### WSL Tip
+Browser data uses only `easylab-next:elisa:*` storage keys at this separate origin. The standalone Electron development identity is `ELISA Analysis Next (Dev)`; it loads local built assets and uses `easylab-next/runtime/elisa-standalone` in this multi-module checkout. It does not read the stable app's profile. Suite integration uses a bundled static page, without an ELISA listener. The Suite source manifest must match the committed ELISA revision before syncing artifacts.
 
-If you run the dev server inside WSL, you can still open it in your Windows browser via:
+## Checks and limits
 
-```bash
-explorer.exe http://localhost:5180
-```
-
-## Quality Checks
-
-```bash
-npm run lint
+```sh
 npm test
-```
-
-E2E smoke test (Playwright):
-
-```bash
+npm run test:runtime
 npm run test:e2e
+npm run lint
+npm run build
 ```
 
-## Desktop (Electron)
+The scientific fixtures cover correction state, blank mean/median, monotonic inversion, range boundaries, dilution, exclusions, missing data, technical replicate summaries and identity conflicts. Parser tests cover malformed/duplicate/unmatched records, shifted plate columns and corrected-input selection. Browser tests cover guided review, invalidation, downloads, package reopen and keyboard/narrow-window behavior.
 
-Dev (runs Vite dev server + Electron):
+See [phase-2 evidence](design-review/next-elisa-phase-2/README.md) for the recorded checks and rendered exports. Native Excel, packaged macOS/installed-app behavior and Windows remain unverified. No merge, installation or release has been performed.
 
-```bash
-npm run desktop:dev
-```
-
-Build an installer (Electron Builder):
-
-```bash
-npm run desktop:dist
-```
-
-## Inputs
-
-Layout input: paste a table where one column is `Animal ID` (and optionally `Group`). The app can auto-guess, but you can override mappings.
-
-Reader input: paste the plate reader output that includes the 450 nm and 570 nm matrices (the app also supports a fallback list format).
-
-## Roadmap
-
-- Desktop installer (Electron)
-- Merge into EasyLab Suite
+Implementation references: [Plotly React integration](https://plotly.com/javascript/react/), [static image export](https://plotly.com/javascript/static-image-export/), [ExcelJS browser support](https://github.com/exceljs/exceljs#browser), [Electron application paths](https://www.electronjs.org/docs/latest/api/app), and [Vite server options](https://vite.dev/config/server-options).
